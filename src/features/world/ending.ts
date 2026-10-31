@@ -4,6 +4,7 @@ import { box, glow } from './materials';
 import { cableHeight } from './hardware';
 import type { RecoveryState } from './recovery-state';
 import './ending.css';
+import { t, translateText } from '../../i18n';
 import { createParticles } from '../loader/particles';
 
 /** The isolated bus endpoint, and the uninterrupted second half of the boot. */
@@ -120,17 +121,18 @@ export function createEnding(scene: THREE.Scene, host: HTMLElement, layer: HTMLE
     ctx.fillStyle = '#061018'; ctx.fillRect(0, 0, 1024, 256);
     ctx.fillStyle = state.complete ? '#a7e4ff' : '#ff7964';
     ctx.font = '500 48px "IBM Plex Mono", monospace';
-    ctx.fillText(state.complete ? 'ENLACE RESTABLECIDO' : 'CORE ISOLATED', 38, 76);
+    ctx.fillText(t(state.complete ? 'coreLinkRestored' : 'coreIsolatedTitle'), 38, 76);
     ctx.font = '27px "IBM Plex Mono", monospace';
-    ctx.fillText(`INTEGRIDAD DE DATOS / ${state.count} DE 20`, 38, 134);
+    ctx.fillText(t('coreData', { count: state.count }), 38, 134);
     ctx.fillStyle = '#87a6b8'; ctx.font = '22px "IBM Plex Mono", monospace';
-    ctx.fillText(state.complete ? 'NÚCLEO LISTO PARA REANUDAR EL ARRANQUE' : 'RESTAURA LOS PAQUETES PARA RESTABLECER EL ENLACE', 38, 193);
+    ctx.fillText(t(state.complete ? 'coreReady' : 'coreRestore'), 38, 193);
     texture.needsUpdate = true;
     signal.color.setHex(state.complete ? 0x76cfff : 0xe6a34e);
     signal.emissive.copy(signal.color);
     layer.dataset.core = state.complete ? 'ready' : 'isolated';
   }
   state.subscribe(refresh); refresh();
+  window.addEventListener('languagechange', refresh);
   const pulse = new THREE.Group(); scene.add(pulse); pulse.visible = false;
   const pulseMaterial = new THREE.MeshBasicMaterial({ color: 0xa9eaff });
   for (const x of [-3, -1.5, 0, 1.5, 3]) box(pulse, [.07, .045, 1.3], [x, 0, 0], pulseMaterial);
@@ -308,8 +310,9 @@ export function createEnding(scene: THREE.Scene, host: HTMLElement, layer: HTMLE
       } else pulse.visible = false;
       nearby = active && player.z < -48.7 && phase === 'idle';
       prompt.hidden = !nearby;
-      prompt.textContent = state.complete ? opened < .99 ? 'LIBERANDO CONECTOR…' : '[E] REANUDAR EL SISTEMA' : `[E] EXAMINAR CORE · ${state.count}/20`;
-      if (performance.now() > noticeUntil) notice.textContent = '';
+      const promptText = translateText(state.complete ? opened < .99 ? 'LIBERANDO CONECTOR…' : '[E] REANUDAR EL SISTEMA' : `[E] EXAMINAR CORE · ${state.count}/20`);
+      if (prompt.textContent !== promptText) prompt.textContent = promptText;
+      if (notice.textContent && performance.now() > noticeUntil) notice.textContent = '';
       if (phase !== 'travel') return;
       if (!captured) { from.copy(player); cameraFrom.copy(camera.position); captured = true; }
       time += delta;

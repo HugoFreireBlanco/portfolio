@@ -1,6 +1,7 @@
 import './styles/base.css';
 import './styles/loader.css';
 import { createLoader } from './features/loader/loader';
+import { initializeLanguages } from './i18n';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (app) {
@@ -10,4 +11,5 @@ if (app) {
   document.body.append(curtain);
   curtain.addEventListener('animationend', () => curtain.remove(), { once: true });
   createLoader(app);
+  initializeLanguages();
 }

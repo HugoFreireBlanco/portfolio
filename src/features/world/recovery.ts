@@ -5,6 +5,7 @@ import { busSupport } from './hardware';
 import { label } from './materials';
 import { corruptRed, recoveryBlue, recoveryPackets, recoveryZones, type RecoveryState } from './recovery-state';
 import './recovery.css';
+import { translateText } from '../../i18n';
 
 export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTMLElement, state: RecoveryState, pause: (value: boolean) => void, openMemory: (index: number) => void) {
   const hud = document.createElement('div');
@@ -120,7 +121,7 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
   const nearestText = hud.querySelector<HTMLElement>('.recovery-meter small')!;
   const direction = hud.querySelector<HTMLElement>('.recovery-direction')!;
   const toast = hud.querySelector<HTMLElement>('.recovery-toast')!;
-  function setText(element: HTMLElement, text: string) { if (element.textContent !== text) element.textContent = text; }
+  function setText(element: HTMLElement, text: string) { const translated = translateText(text); if (element.textContent !== translated) element.textContent = translated; }
   function notify(text: string) { lastToast = text; toastUntil = performance.now() + 5500; toast.textContent = text; toast.classList.add('is-visible'); }
   function refresh() {
     if (sadFace) sadFace.visible = !state.complete;

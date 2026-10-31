@@ -4,6 +4,7 @@ import { bootSteps } from './boot';
 import { createParticles } from './particles';
 import type { WorldController } from '../world/world';
 import { createPortfolio } from '../portfolio/portfolio';
+import { getLanguage } from '../../i18n';
 
 const wait = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
 
@@ -131,7 +132,7 @@ export function createLoader(root: HTMLElement): void {
         if ([72, 78, 82, 86].includes(value)) {
           glitch();
           if (!reducedMotion.matches) {
-            title('HUG0 /', 'S0FTW_RE DEV//OPER');
+            title('HUG0 /', getLanguage() === 'es' ? 'DES_RR0LLAD0R S0FTW_RE' : 'S0FTW_RE DEV//OPER');
             await wait(140);
             title('HUGO /', 'SOFTWARE DEVELOPER');
           }

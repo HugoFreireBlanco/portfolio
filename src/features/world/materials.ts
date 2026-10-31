@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getLanguage, t, translateText } from '../../i18n';
 
 export const palette = { cyan: 0x70d9db, red: 0xe34760, violet: 0x847de8, amber: 0xcda266 };
 
@@ -10,29 +11,35 @@ export function label(text: string, color = '#8acbd2', width = 5): THREE.Mesh {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
   canvas.height = 256;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#080f16';
-  ctx.fillRect(0, 0, 1024, 256);
-  ctx.fillStyle = color;
-  ctx.fillRect(32, 32, 6, 192);
-  let fontSize = 64;
-  ctx.font = `500 ${fontSize}px "IBM Plex Mono", monospace`;
-  while (ctx.measureText(text).width > 910 && fontSize > 24) {
-    ctx.font = `500 ${--fontSize}px "IBM Plex Mono", monospace`;
-  }
-  ctx.fillText(text, 70, 123);
-  ctx.font = '24px "IBM Plex Mono", monospace';
-  ctx.globalAlpha = .65;
-  ctx.fillText('HUGO / SYSTEM ARCHITECTURE', 72, 190);
   const texture = new THREE.CanvasTexture(canvas);
+  texture.userData = { labelText: text, labelColor: color };
+  function draw(map: THREE.Texture) {
+    const ctx = (map.image as HTMLCanvasElement).getContext('2d')!;
+    const title = translateText(map.userData.labelText as string).toLocaleUpperCase();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#080f16'; ctx.fillRect(0, 0, 1024, 256);
+    ctx.fillStyle = map.userData.labelColor as string;
+    ctx.fillRect(32, 32, 6, 192);
+    let fontSize = 64;
+    ctx.font = `500 ${fontSize}px "IBM Plex Mono", monospace`;
+    while (ctx.measureText(title).width > 910 && fontSize > 24) ctx.font = `500 ${--fontSize}px "IBM Plex Mono", monospace`;
+    ctx.fillText(title, 70, 123);
+    ctx.font = '24px "IBM Plex Mono", monospace'; ctx.globalAlpha = .65;
+    ctx.fillText(t('architecture'), 72, 190);
+    map.userData.language = getLanguage();
+    map.needsUpdate = true;
+  }
+  draw(texture);
   texture.colorSpace = THREE.SRGBColorSpace;
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, width / 4), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }));
   // Keep mipmaps for stable distant lettering; anisotropy preserves angled signs.
   mesh.onBeforeRender = renderer => {
+    const map = (mesh.material as THREE.MeshBasicMaterial).map!;
+    if (map.userData.language !== getLanguage()) draw(map);
     const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-    if (texture.anisotropy !== anisotropy) {
-      texture.anisotropy = anisotropy;
-      texture.needsUpdate = true;
+    if (map.anisotropy !== anisotropy) {
+      map.anisotropy = anisotropy;
+      map.needsUpdate = true;
     }
   };
   return mesh;

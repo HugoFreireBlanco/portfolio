@@ -88,6 +88,15 @@ partículas del loader se pausan; al regresar se conserva la sesión y la recupe
 El contenido se centraliza en `src/features/portfolio/content.ts`. Los datos
 personales todavía no aportados se indican como pendientes, sin inventar historial.
 
+### Idiomas
+
+Los catálogos completos están en `src/i18n/en.ts` y `src/i18n/es.ts`.
+La primera visita comienza en inglés; el selector EN/ES de la esquina superior
+derecha cambia el idioma y guarda la preferencia en `localStorage` (`hugo-language`).
+El cambio conserva partida, ruta, diálogos y foco. Incluye contenido del Archivo,
+avisos dinámicos, accesibilidad y carteles generados en canvas del mundo 3D.
+Los nombres propios, tecnologías, códigos y rutas internas mantienen su identidad.
+
 - **WASD / flechas:** desplazarse por el puente, con límites laterales.
 - **Espacio:** saltar.
 - **E:** hablar con AUX o interactuar con un terminal cercano.
@@ -101,9 +110,27 @@ personales todavía no aportados se indican como pendientes, sin inventar histor
 - **Repetir entrada:** vuelve a reproducir la transición sin recargar recursos.
 
 El escenario es procedural y utiliza materiales metálicos, iluminación de entorno,
-reflejo planar y bloom. Las piezas estáticas se agrupan por material para reducir
-las llamadas de dibujo. Se limita la resolución en móvil y se pausa al ocultar
+reflejo planar y bloom. Las piezas estáticas se agrupan por material y tramos de
+32 unidades para descartar bloques fuera de cámara sin multiplicar excesivamente
+las llamadas de dibujo. El reflejo planar se actualiza como máximo a 20 Hz en
+escritorio; móvil usa el mapa de entorno metálico sin una segunda pasada de escena.
+El bloom trabaja al 60 % de resolución por eje; geometría y textos conservan su
+resolución. El tráfico decorativo se interpola en cada fotograma con una tabla precalculada
+del conducto; los paquetes recuperables mantienen actualización en cada fotograma.
+La resolución se adapta ante lentitud sostenida y el render se pausa al ocultar
 la pestaña. No se descargan modelos 3D externos.
+
+La calidad tiene cuatro niveles (`full`, `balanced`, `light`, `minimal`). Móvil
+comienza sin postprocesado, con menos luces y un presupuesto de un millón de
+píxeles; si Chrome informa de memoria ≤4 GiB o ≤4 hilos, comienza en `light`.
+El render directo conserva ACES y la salida sRGB. Ante fotogramas sostenidos por
+encima de 38 ms en móvil (27 ms en escritorio), baja un nivel cada ~1,8 s de
+muestreo activo. Los fotogramas muy lentos también cuentan; las pausas de ≥1 s
+reinician el muestreo. Solo sube tras ~18 s con amplio margen. Los niveles
+inferiores reducen luces, chispas y resolución sin limitar la frecuencia de la
+cámara, controles o pulsos del bus. La interfaz HTML conserva su resolución.
+Las variantes de shaders de los niveles inferiores se precalientan durante la
+carga para evitar compilaciones al reducir la calidad durante el recorrido.
 
 El haz consta de 19 conductores; su función de altura se comparte entre la
 geometría, el protagonista y los bytes secundarios. El tráfico usa geometrías

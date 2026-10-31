@@ -10,6 +10,7 @@ export interface Environment {
   path: THREE.CatmullRomCurve3;
   packets: THREE.InstancedMesh;
   fault: THREE.MeshStandardMaterial;
+  setQuality: (level: number) => void;
   update: (time: number, reduced: boolean, player?: THREE.Vector3, yaw?: number) => void;
   canOccupy: (x: number, z: number, yaw?: number) => boolean;
   recover: (x: number, z: number, height: number, yaw?: number) => string[];
@@ -24,11 +25,33 @@ export function buildEnvironment(scene: THREE.Scene, mobile: boolean, recovery: 
   const violet = glow(palette.violet, .3);
   const fault = glow(palette.red, .5);
 
-  // Lower motherboard reflects the suspended bus and vertical components.
-  const mirror = new Reflector(new THREE.PlaneGeometry(180, 180), { color: 0x253443, textureWidth: mobile ? 256 : 512, textureHeight: mobile ? 256 : 512, clipBias: .003 });
+  // Mobile uses the shared environment map instead of rendering the entire scene twice.
+  const mirror = mobile
+    ? new THREE.Mesh(new THREE.PlaneGeometry(180, 180), new THREE.MeshStandardMaterial({ color: 0x101c26, metalness: .65, roughness: .38 }))
+    : new Reflector(new THREE.PlaneGeometry(180, 180), { color: 0x253443, textureWidth: 384, textureHeight: 384, clipBias: .003, multisample: 0 });
+  mirror.name = 'motherboard-floor';
+  const fallbackFloor = mirror instanceof Reflector
+    ? new THREE.Mesh(mirror.geometry, new THREE.MeshStandardMaterial({ color: 0x101c26, metalness: .65, roughness: .38 }))
+    : undefined;
+  if (mirror instanceof Reflector) {
+    const reflect = mirror.onBeforeRender.bind(mirror);
+    let reflectedAt = -Infinity;
+    mirror.onBeforeRender = (...args) => {
+      const now = performance.now();
+      if (now - reflectedAt < 1000 / 20) return;
+      reflectedAt = now;
+      reflect(...args);
+    };
+  }
   mirror.rotation.x = -Math.PI / 2;
   mirror.position.set(0, -3.15, -22);
   scene.add(mirror);
+  if (fallbackFloor) {
+    fallbackFloor.position.copy(mirror.position);
+    fallbackFloor.rotation.copy(mirror.rotation);
+    fallbackFloor.visible = false;
+    scene.add(fallbackFloor);
+  }
   const grid = new THREE.GridHelper(150, 75, 0x1a3a4b, 0x0f202d);
   grid.position.set(0, -3.12, -25);
   scene.add(grid);
@@ -37,7 +60,8 @@ export function buildEnvironment(scene: THREE.Scene, mobile: boolean, recovery: 
   for (let z = 4; z > -53; z -= 12) {
     box(scene, [17, .28, 2.8], [0, -1.7, z], dark);
     for (const x of [-8.4, 8.4]) box(scene, [.04, .04, 2.8], [x, -1.53, z], cyan);
-    for (const x of [-3, 3]) box(scene, [.5, 2.7, .5], [x, -1.8, z], metal);
+    // Posts stop at the underside of the crossbeam, clear of the cable troughs.
+    for (const x of [-3, 3]) box(scene, [.5, 1.3, .5], [x, -2.49, z], metal);
   }
 
   // Interactive RAM modules are built separately by memory.ts, with shared records.
@@ -158,24 +182,37 @@ export function buildEnvironment(scene: THREE.Scene, mobile: boolean, recovery: 
   inletLabel.position.set(0, 2.85, .9);
   inlet.add(inletLabel);
 
-  // Merge the repeated kit by material: hundreds of components, a handful of draws.
+  // Batch locally: a single world-sized mesh prevents useful frustum culling.
   scene.updateMatrixWorld(true);
-  const batches = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  const batches = new Map<THREE.Material, Map<string, THREE.BufferGeometry[]>>();
+  const center = new THREE.Vector3();
   const originals: THREE.Mesh[] = [];
   scene.traverse(object => {
+    if (object === mirror || object === fallbackFloor) return;
     if (!(object instanceof THREE.Mesh) || !(object.material instanceof THREE.MeshStandardMaterial)) return;
     const geometry = object.geometry.clone().applyMatrix4(object.matrixWorld);
     if (!geometry.index) geometry.setIndex(Array.from({ length: geometry.getAttribute('position').count }, (_, index) => index));
     if (!geometry.getAttribute('uv')) geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(geometry.getAttribute('position').count * 2), 2));
-    const list = batches.get(object.material) || [];
+    geometry.computeBoundingBox();
+    geometry.boundingBox!.getCenter(center);
+    const cell = `${Math.floor(center.z / 32)}`;
+    const cells = batches.get(object.material) || new Map<string, THREE.BufferGeometry[]>();
+    const list = cells.get(cell) || [];
     list.push(geometry);
-    batches.set(object.material, list);
+    cells.set(cell, list);
+    batches.set(object.material, cells);
     originals.push(object);
   });
   for (const mesh of originals) { mesh.removeFromParent(); mesh.geometry.dispose(); }
-  for (const [material, geometries] of batches) {
+  for (const [material, cells] of batches) for (const [cell, geometries] of cells) {
     const combined = mergeGeometries(geometries, false);
-    if (combined) scene.add(new THREE.Mesh(combined, material));
+    if (combined) {
+      combined.computeBoundingSphere();
+      const mesh = new THREE.Mesh(combined, material);
+      mesh.name = `hardware-cell-${cell}`;
+      mesh.matrixAutoUpdate = false;
+      scene.add(mesh);
+    }
     geometries.forEach(geometry => geometry.dispose());
   }
 
@@ -183,22 +220,42 @@ export function buildEnvironment(scene: THREE.Scene, mobile: boolean, recovery: 
   packets.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   scene.add(packets);
   const dummy = new THREE.Object3D();
+  // Arc-length lookup avoids repeatedly evaluating the decorative tube traffic spline.
+  const pathSamples = 256;
+  const packetFrames = Array.from({ length: pathSamples + 1 }, (_, i) => {
+    const t = i / pathSamples;
+    return {
+      position: path.getPointAt(t),
+      rotation: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), path.getTangentAt(t)),
+    };
+  });
+  const offset = new THREE.Vector3();
+  let decorationReduced = false;
   const updateTraffic = createTraffic(scene, recovery);
   return {
     path, packets, fault,
+    setQuality(level: number) {
+      if (fallbackFloor) { mirror.visible = level === 0; fallbackFloor.visible = level !== 0; }
+    },
     canOccupy: (x, z, yaw) => updateTraffic.canOccupy(x, z, yaw),
     recover: (x, z, height, yaw) => updateTraffic.recover(x, z, height, yaw),
     update(time, reduced, player, yaw) {
       updateTraffic.update(time, reduced, player, yaw);
       fault.emissiveIntensity = reduced ? .5 : .4 + Math.pow(Math.sin(time * 2.3), 12) * .6;
+      // Interpolate the cached path every frame so nearby signals never visibly step.
+      if (reduced && decorationReduced) return;
+      decorationReduced = reduced;
       for (let i = 0; i < 65; i++) {
         if (i < 35) {
           const t = ((reduced ? 0 : time * .035) + i / 35) % 1;
-          dummy.position.copy(path.getPointAt(t));
-          dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), path.getTangentAt(t));
+          const sample = t * pathSamples;
+          const index = Math.min(pathSamples - 1, Math.floor(sample));
+          const blend = sample - index;
+          dummy.position.lerpVectors(packetFrames[index].position, packetFrames[index + 1].position, blend);
+          dummy.quaternion.slerpQuaternions(packetFrames[index].rotation, packetFrames[index + 1].rotation, blend);
           // Reserve the central sled volume: packets run along the outer wall.
           const angle = i * 2.39996;
-          dummy.position.add(new THREE.Vector3(Math.cos(angle) * 1.95, Math.sin(angle) * 1.95, 0).applyQuaternion(dummy.quaternion));
+          dummy.position.add(offset.set(Math.cos(angle) * 1.95, Math.sin(angle) * 1.95, 0).applyQuaternion(dummy.quaternion));
         } else {
           const z = 10 - (((reduced ? 0 : time * 3) + i * 3.1) % 64);
           dummy.position.set(i % 2 ? 3.1 : -3.1, cableHeight(z) + .08, z);

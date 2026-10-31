@@ -1,5 +1,6 @@
 import { archiveSections, profile, projects, memoryRecords, memoryRecordMarkup } from './content';
 import './portfolio.css';
+import { translateText } from '../../i18n';
 
 export function createPortfolio(root: HTMLElement, onReading: (reading: boolean) => void) {
   const navigation = document.createElement('nav');
@@ -20,18 +21,19 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
     const stop = () => {
       window.clearInterval(timer);
       timer = undefined;
-      label.textContent = original;
+      label.textContent = translateText(original);
       link.classList.remove('is-scrambling');
     };
     const scramble = () => {
       stop();
       if (reducedMotion.matches) return;
       const glyphs = '01_/#<>+*░';
+      const localized = translateText(original);
       let tick = 0;
       link.classList.add('is-scrambling');
       const update = () => {
         tick++;
-        label.textContent = [...original].map((letter, index) => letter === ' ' ? ' ' : index < (tick - 2) / 7 * original.length ? letter : Math.random() < .65 ? glyphs[Math.floor(Math.random() * glyphs.length)] : letter).join('');
+        label.textContent = [...localized].map((letter, index) => letter === ' ' ? ' ' : index < (tick - 2) / 7 * localized.length ? letter : Math.random() < .65 ? glyphs[Math.floor(Math.random() * glyphs.length)] : letter).join('');
         if (tick >= 9) stop();
       };
       update();
@@ -45,6 +47,7 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
     stopGlitches.push(stop);
   }
   reducedMotion.addEventListener('change', () => stopGlitches.forEach(stop => stop()));
+  window.addEventListener('languagechange', () => stopGlitches.forEach(stop => stop()));
   const reading = document.createElement('main');
   reading.className = 'portfolio-reading';
   reading.hidden = true;

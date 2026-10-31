@@ -40,17 +40,27 @@ export function createAtmosphere(scene: THREE.Scene, hemi: THREE.HemisphereLight
   const sparks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), sources.length * perSource);
   sparks.name = 'ceiling-fault-sparks';
   sparks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  sparks.frustumCulled = false;
+  // Fixed conservative bounds cover both emitters and their ballistic trajectories.
+  sparks.boundingSphere = new THREE.Sphere(new THREE.Vector3(-11, 11, -1), 28);
   scene.add(sparks);
   const dummy = new THREE.Object3D();
   const color = new THREE.Color();
   const velocity = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
+  let activePerSource = perSource;
   for (let i = 0; i < sparks.count; i++) {
     color.setHex(i % 4 === 0 ? 0xffecaf : i % 3 === 0 ? 0xff541b : 0xffa43b);
     sparks.setColorAt(i, color);
   }
   return {
+    setQuality(level: number) {
+      // Fixed light sets avoid shader recompilation on every camera movement.
+      accents.forEach((light, index) => { light.visible = level === 0 || level === 1 && index === 1; });
+      beacons.forEach((light, index) => { light.visible = level === 0 || level < 3 && index === 1; });
+      activePerSource = level >= 3 ? 0 : level === 2 ? 8 : level === 1 ? 14 : perSource;
+      sparks.count = activePerSource * sources.length;
+      sparks.visible = sparks.count > 0;
+    },
     update(time: number, reduced: boolean, restored: readonly boolean[] = [], complete = false, delta = 1 / 60) {
       const blend = reduced ? 1 : 1 - Math.exp(-delta * .8);
       stability += ((complete ? 1 : 0) - stability) * blend;
@@ -75,12 +85,12 @@ export function createAtmosphere(scene: THREE.Scene, hemi: THREE.HemisphereLight
         lenses[i].emissiveIntensity = (.12 + alarm * 1.5) * (1 - repair) + repair * .7;
       });
       for (let i = 0; i < sparks.count; i++) {
-        const source = Math.floor(i / perSource);
-        const slot = i % perSource;
+        const source = Math.floor(i / activePerSource);
+        const slot = i % activePerSource;
         const period = 4.8 + source * 1.3;
-        const age = (time + source * 1.8) % period - slot / perSource * .65;
+        const age = (time + source * 1.8) % period - slot / activePerSource * .65;
         const life = source === 0 ? 2.3 : 1.55;
-        const visible = !reduced && age >= 0 && age < life && slot / perSource < 1 - stability * .9;
+        const visible = !reduced && age >= 0 && age < life && slot / activePerSource < 1 - stability * .9;
         const t = Math.max(0, age);
         const angle = i * 2.39996;
         const speed = .7 + (i * .37) % 1.7;

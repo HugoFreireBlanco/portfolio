@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { AdaptiveQuality } from './adaptive-quality';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -29,7 +30,7 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   layer.innerHTML = `<div class="world-viewport"></div>
     <div class="world-heading"><h2 tabindex="-1">THE DATA BUS<span>_</span></h2><p>Recupera los paquetes. Restaura la información.</p></div>
     <button class="skip-transit" type="button">OMITIR <kbd>ESC</kbd></button>
-    <div class="world-bottom"><div class="movement-hint"><span class="keyboard-hint"><kbd>W A S D</kbd> MOVER &nbsp; <kbd>ESPACIO</kbd> SALTAR &nbsp; ARRASTRA PARA MIRAR</span><span class="touch-hint">ARRASTRA EL ESCENARIO PARA MIRAR</span></div></div>
+    <div class="world-bottom"><div class="movement-hint"><span class="keyboard-hint"><kbd>W A S D</kbd> <span>MOVER</span> &nbsp; <kbd>ESPACIO</kbd> <span>SALTAR</span> &nbsp; <span>ARRASTRA PARA MIRAR</span></span><span class="touch-hint">ARRASTRA EL ESCENARIO PARA MIRAR</span></div></div>
     <div class="mobile-controls" aria-label="Controles de movimiento"><div class="movement-joystick" role="group" aria-label="Joystick de movimiento: arrastra para moverte"><span class="joystick-guide" aria-hidden="true"></span><span class="joystick-thumb" aria-hidden="true"></span></div><button class="jump-control" type="button" aria-label="Saltar">↥</button></div>
     <span class="world-announcement sr-only" aria-live="polite"></span>`;
   host.append(layer);
@@ -40,11 +41,14 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   const gl = renderer.getContext();
   const debug = gl.getExtension('WEBGL_debug_renderer_info');
   const software = debug ? /swiftshader|llvmpipe|software/i.test(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)) : false;
+  const memoryGiB = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  const quality = new AdaptiveQuality(mobile, mobile && (memoryGiB !== undefined && memoryGiB <= 4 || navigator.hardwareConcurrency <= 4));
   // Bound fill-rate on large displays while keeping high-density screens crisp.
   function preferredRenderRatio() {
     if (software) return .75;
-    const pixelBudget = mobile ? 2_000_000 : 4_000_000;
-    return Math.min(devicePixelRatio, mobile ? 1.5 : 1.75, Math.sqrt(pixelBudget / (innerWidth * innerHeight)));
+    const pixelBudget = [4_000_000, mobile ? 1_000_000 : 2_500_000, 700_000, 420_000][quality.level];
+    const cap = [1.75, mobile ? 1.25 : 1.5, 1, .8][quality.level];
+    return Math.min(devicePixelRatio, cap, Math.sqrt(pixelBudget / (innerWidth * innerHeight)));
   }
   let renderRatio = preferredRenderRatio();
   renderer.setPixelRatio(renderRatio);
@@ -88,8 +92,29 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   composer.renderTarget1.samples = mobile || software ? 0 : 2;
   composer.renderTarget2.samples = mobile || software ? 0 : 2;
   composer.addPass(new RenderPass(scene, camera));
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .18, .2, 1.1));
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), .18, .2, 1.1);
+  const resizeBloom = bloom.setSize.bind(bloom);
+  // Only the soft light halo is low-resolution; geometry and text retain full resolution.
+  bloom.setSize = (width, height) => resizeBloom(Math.max(1, Math.round(width * .6)), Math.max(1, Math.round(height * .6)));
+  composer.addPass(bloom);
   composer.addPass(new OutputPass());
+  function drawScene() {
+    // Direct rendering still applies ACES tone mapping and sRGB output, without
+    // offscreen buffers, bloom blur passes or a fullscreen output copy.
+    if (quality.level === 0) composer.render();
+    else renderer.render(scene, camera);
+  }
+  function applyQuality() {
+    renderRatio = preferredRenderRatio();
+    renderer.setPixelRatio(renderRatio);
+    composer.setPixelRatio(renderRatio);
+    atmosphere.setQuality(quality.level);
+    environment.setQuality(quality.level);
+    layer.dataset.quality = ['full', 'balanced', 'light', 'minimal'][quality.level];
+    layer.dataset.renderRatio = renderRatio.toFixed(2);
+    quality.reset();
+  }
+  applyQuality();
 
   const keys = new Set<string>();
   const joystick = layer.querySelector<HTMLElement>('.movement-joystick')!;
@@ -108,7 +133,6 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   let elapsed = 0;
   let atmosphereTime = 0;
   let lastFrame = 0;
-  let slowFrames = 0;
   let landedAt = 0;
   let transitTime = 0;
   let mode: 'idle' | 'forming' | 'transit' | 'falling' | 'explore' | 'ending' | 'memory' = 'idle';
@@ -184,6 +208,7 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
 
   function applyPause() {
     resetJoystick();
+    quality.reset();
     paused = externalPaused || dialoguePaused || endingPaused;
     keys.clear();
     drag.active = false;
@@ -381,16 +406,9 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
     const delta = lastFrame ? (now - lastFrame) / 1000 : 1 / 60;
     lastFrame = now;
     // Keep the cinematic duration independent of frame rate; lower fill cost on slow GPUs.
-    const minimumRatio = Math.min(preferredRenderRatio(), software ? .65 : .85);
-    slowFrames = delta > .05 ? slowFrames + 1 : 0;
-    if (slowFrames > 120 && renderRatio > minimumRatio && elapsed > 3) {
-      renderRatio = Math.max(minimumRatio, renderRatio - .15);
-      renderer.setPixelRatio(renderRatio);
-      composer.setPixelRatio(renderRatio);
-      slowFrames = 0;
-    }
+    if ((mode === 'explore' || mode === 'memory') && quality.sample(delta)) applyQuality();
     update(delta);
-    composer.render();
+    drawScene();
     if (!paused) frame = requestAnimationFrame(render);
   }
 
@@ -422,7 +440,7 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
       land();
     } else formationPose(0);
     // Replace the GPU warm-up view before exposing the canvas; start time at this pose.
-    composer.render();
+    drawScene();
     layer.hidden = false;
     lastFrame = performance.now();
     frame = requestAnimationFrame(render);
@@ -504,9 +522,7 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
     keys.delete('Space');
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
-    renderRatio = Math.min(renderRatio, preferredRenderRatio());
-    renderer.setPixelRatio(renderRatio);
-    composer.setPixelRatio(renderRatio);
+    applyQuality();
     renderer.setSize(innerWidth, innerHeight);
     composer.setSize(innerWidth, innerHeight);
     distance = innerWidth < 700 ? 7.8 : 6.4;
@@ -527,23 +543,35 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   atmosphere.update(0, reduced.matches);
   byte.root.position.copy(environment.path.getPointAt(0));
   await renderer.compileAsync(scene, camera);
-  composer.render();
+  drawScene();
   // Warm the actual postprocessing targets at both ends before exposing the canvas.
   camera.position.copy(arrivalTarget).add(orbitOffset());
   camera.lookAt(arrivalTarget);
-  composer.render();
+  drawScene();
   // Upload side-wall hardware and ceiling batches while the loader is still visible.
   for (const side of [-1, 1]) {
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
     camera.position.set(side * 3, 3, -9);
     camera.lookAt(side * 13, 9, -23);
-    composer.render();
+    drawScene();
   }
   camera.position.copy(arrivalTarget).add(orbitOffset());
   camera.lookAt(arrivalTarget);
-  composer.render();
+  // Precompile lower-light shader variants behind the loader, so adapting on an
+  // older GPU does not introduce a compilation freeze while the player is moving.
+  const initialQuality = quality.level;
+  for (let level = initialQuality + 1; level <= 3; level++) {
+    quality.level = level;
+    applyQuality();
+    await renderer.compileAsync(scene, camera);
+    drawScene();
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  }
+  quality.level = initialQuality;
+  applyQuality();
+  drawScene();
   formationPose(0);
-  composer.render();
+  drawScene();
   return {
     enter,
     setPaused(value) { externalPaused = value; if (value) memory.cancel(); applyPause(); },
