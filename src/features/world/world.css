@@ -20,3 +20,5 @@
 @media(hover:none) and (pointer:coarse) and (min-width:560px){.jump-control{display:block}}
 @media(hover:none) and (pointer:coarse){.world-layer[data-mode=explore] .movement-joystick{pointer-events:auto}.world-heading p{display:none}#app[data-view=explorar] .world-heading{top:115px;left:25px}.world-heading h2{margin:8px 0}.mobile-controls{bottom:95px}}
 @media(max-height:500px) and (orientation:landscape) and (pointer:coarse){.mobile-controls{bottom:50px}.movement-joystick{width:88px;height:88px}}
+@media(hover:none) and (pointer:coarse){.mobile-controls{flex-direction:row-reverse}.joystick-thumb{width:42px;height:42px;margin:-21px}}
+@media(hover:none) and (pointer:coarse) and (min-height:501px){.movement-joystick{width:100px;height:100px}}

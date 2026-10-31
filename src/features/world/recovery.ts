@@ -131,7 +131,12 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
   const nearestText = hud.querySelector<HTMLElement>('.recovery-meter small')!;
   const direction = hud.querySelector<HTMLElement>('.recovery-direction')!;
   const toast = hud.querySelector<HTMLElement>('.recovery-toast')!;
-  function setText(element: HTMLElement, text: string) { const translated = translateText(text); if (element.textContent !== translated) element.textContent = translated; }
+  const touchControls = matchMedia('(hover: none) and (pointer: coarse)');
+  function setText(element: HTMLElement, text: string) {
+    let translated = translateText(text);
+    if (touchControls.matches) translated = translated.replace(/^\[E\]\s*/, '');
+    if (element.textContent !== translated) element.textContent = translated;
+  }
   function notify(text: string) { lastToast = text; toastUntil = performance.now() + 5500; toast.textContent = text; toast.classList.add('is-visible'); }
   function refresh() {
     if (sadFace) sadFace.visible = !state.complete;

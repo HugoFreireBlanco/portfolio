@@ -140,6 +140,7 @@ export function createEnding(scene: THREE.Scene, host: HTMLElement, layer: HTMLE
   const prompt = document.createElement('button'); prompt.className = 'core-interact'; prompt.type = 'button'; prompt.hidden = true;
   layer.append(prompt);
   const notice = document.createElement('p'); notice.className = 'core-notice'; notice.setAttribute('role', 'status'); layer.append(notice);
+  const touchControls = matchMedia('(hover: none) and (pointer: coarse)');
   const dialog = document.createElement('dialog'); dialog.className = 'ending-dialog';
   dialog.setAttribute('aria-label', 'Restauración del sistema y créditos');
   dialog.innerHTML = `<div class="ending-veil"></div><button class="ending-skip" type="button">OMITIR TRANSICIÓN</button>
@@ -310,7 +311,8 @@ export function createEnding(scene: THREE.Scene, host: HTMLElement, layer: HTMLE
       } else pulse.visible = false;
       nearby = active && player.z < -48.7 && phase === 'idle';
       prompt.hidden = !nearby;
-      const promptText = translateText(state.complete ? opened < .99 ? 'LIBERANDO CONECTOR…' : '[E] REANUDAR EL SISTEMA' : `[E] EXAMINAR CORE · ${state.count}/20`);
+      let promptText = translateText(state.complete ? opened < .99 ? 'LIBERANDO CONECTOR…' : '[E] REANUDAR EL SISTEMA' : `[E] EXAMINAR CORE · ${state.count}/20`);
+      if (touchControls.matches) promptText = promptText.replace(/^\[E\]\s*/, '');
       if (prompt.textContent !== promptText) prompt.textContent = promptText;
       if (notice.textContent && performance.now() > noticeUntil) notice.textContent = '';
       if (phase !== 'travel') return;
