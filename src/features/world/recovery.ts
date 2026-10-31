@@ -107,6 +107,16 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
     const mesh = label(`${zone.code} / ${zone.title.toUpperCase()}`, '#9aacbb', 2.2);
     mesh.position.copy(terminalPositions[i]).add(new THREE.Vector3(0, 1.2, 0)); scene.add(mesh); return mesh;
   });
+  const terminalIcons = terminalPositions.map((position, index) => {
+    const icon = new THREE.Group();
+    icon.name = `terminal-ready-${recoveryZones[index].code}`;
+    icon.add(iconFrame.clone(), iconStroke.clone(), iconDot.clone());
+    icon.scale.setScalar(.65);
+    icon.position.copy(position).add(new THREE.Vector3(0, 1.85, 0));
+    icon.visible = false;
+    scene.add(icon);
+    return icon;
+  });
   const marker = new THREE.Mesh(new THREE.TorusGeometry(.65, .025, 4, 24), new THREE.MeshBasicMaterial({ color: recoveryBlue, toneMapped: false }));
   marker.rotation.x = Math.PI / 2; marker.visible = false; scene.add(marker);
   let tracked = -1;
@@ -253,6 +263,10 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
       guideIcon.position.y = npc.root.position.y + .95 + (reduced || state.complete ? 0 : Math.sin(performance.now() * .0025) * .06);
       guideIcon.scale.setScalar(state.greeted ? .8 : 1);
       labels.forEach((mesh, i) => { mesh.visible = active && Math.abs(player.z - terminalPositions[i].z) < 8; mesh.quaternion.copy(camera.quaternion); });
+      terminalIcons.forEach((icon, i) => {
+        icon.visible = active && state.zoneCount(i) === recoveryZones[i].count;
+        icon.quaternion.copy(camera.quaternion);
+      });
       if (!active) return;
       nearby = player.distanceTo(npc.root.position) < 2.5 ? -1 : -2;
       if (nearby === -2) terminalPositions.forEach((p, i) => { if (player.distanceTo(p) < 2.4) nearby = i; });

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AdaptiveQuality } from './adaptive-quality';
+import { AdaptiveQuality, calibrationFits } from './adaptive-quality';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -560,15 +560,42 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   // Precompile lower-light shader variants behind the loader, so adapting on an
   // older GPU does not introduce a compilation freeze while the player is moving.
   const initialQuality = quality.level;
-  for (let level = initialQuality + 1; level <= 3; level++) {
+  for (let level = 0; level <= 3; level++) {
+    if (level === initialQuality) continue;
     quality.level = level;
     applyQuality();
     await renderer.compileAsync(scene, camera);
     drawScene();
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
   }
-  quality.level = initialQuality;
+  // Calibrate real render work only after shaders and geometry have been warmed.
+  // All views remain behind the loader; rAF measures presentation/backpressure too.
+  const calibrationStarted = performance.now();
+  let calibratedLevel = 3;
+  for (let level = 0; level <= 3; level++) {
+    if (performance.now() - calibrationStarted > 2000) break;
+    quality.level = level;
+    applyQuality();
+    const samples: number[] = [];
+    for (let sample = 0; sample < 8; sample++) {
+      const depth = sample < 4 ? 0 : -24;
+      target.copy(arrivalTarget); target.z += depth;
+      camera.position.copy(target).add(orbitOffset());
+      camera.lookAt(target);
+      const started = performance.now();
+      drawScene();
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      // Discard the first frame of each view (uploads / target resize).
+      if (sample !== 0 && sample !== 4) samples.push(performance.now() - started);
+      if (performance.now() - calibrationStarted > 2000) break;
+    }
+    if (calibrationFits(samples, mobile)) { calibratedLevel = level; break; }
+  }
+  quality.level = calibratedLevel;
+  layer.dataset.calibrationMs = String(Math.round(performance.now() - calibrationStarted));
   applyQuality();
+  camera.position.copy(arrivalTarget).add(orbitOffset());
+  camera.lookAt(arrivalTarget);
   drawScene();
   formationPose(0);
   drawScene();

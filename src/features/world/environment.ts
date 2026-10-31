@@ -25,10 +25,8 @@ export function buildEnvironment(scene: THREE.Scene, mobile: boolean, recovery: 
   const violet = glow(palette.violet, .3);
   const fault = glow(palette.red, .5);
 
-  // Mobile uses the shared environment map instead of rendering the entire scene twice.
-  const mirror = mobile
-    ? new THREE.Mesh(new THREE.PlaneGeometry(180, 180), new THREE.MeshStandardMaterial({ color: 0x101c26, metalness: .65, roughness: .38 }))
-    : new Reflector(new THREE.PlaneGeometry(180, 180), { color: 0x253443, textureWidth: 384, textureHeight: 384, clipBias: .003, multisample: 0 });
+  // Full quality can be unlocked on any device; lower tiers use the environment map.
+  const mirror = new Reflector(new THREE.PlaneGeometry(180, 180), { color: 0x253443, textureWidth: 384, textureHeight: 384, clipBias: .003, multisample: 0 });
   mirror.name = 'motherboard-floor';
   const fallbackFloor = mirror instanceof Reflector
     ? new THREE.Mesh(mirror.geometry, new THREE.MeshStandardMaterial({ color: 0x101c26, metalness: .65, roughness: .38 }))
@@ -115,15 +113,6 @@ export function buildEnvironment(scene: THREE.Scene, mobile: boolean, recovery: 
     box(scene, [.09, 1.5, .05], [x, -1.8, z + .65], i % 9 === 0 ? fault : cyan);
     const trace = new THREE.CatmullRomCurve3([new THREE.Vector3(x, -3.06, z), new THREE.Vector3(x + 3, -3.06, z - 3), new THREE.Vector3(x + 3, -3.06, z - 9), new THREE.Vector3(x + 7, -3.06, z - 13)]);
     scene.add(new THREE.Mesh(new THREE.TubeGeometry(trace, 8, .025, 3, false), i % 7 === 0 ? fault : cyan));
-  }
-
-  // Small stations establish the future portfolio geography, with honest labels.
-  for (const [index, text] of ['01 / IDENTITY', '02 / PROJECTS', '03 / MEMORY'].entries()) {
-    const sign = label(text, '#86b6c2', 4.6);
-    sign.position.set(index % 2 ? 6.5 : -6.5, 1.8, 2 - index * 13);
-    sign.rotation.y = index % 2 ? -.3 : .3;
-    scene.add(sign);
-    box(scene, [.1, 2.5, .1], [sign.position.x, .4, sign.position.z], metal);
   }
 
   const path = new THREE.CatmullRomCurve3([

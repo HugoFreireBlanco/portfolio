@@ -113,7 +113,7 @@ El escenario es procedural y utiliza materiales metálicos, iluminación de ento
 reflejo planar y bloom. Las piezas estáticas se agrupan por material y tramos de
 32 unidades para descartar bloques fuera de cámara sin multiplicar excesivamente
 las llamadas de dibujo. El reflejo planar se actualiza como máximo a 20 Hz en
-escritorio; móvil usa el mapa de entorno metálico sin una segunda pasada de escena.
+calidad completa; los niveles inferiores usan el mapa de entorno metálico sin una segunda pasada de escena.
 El bloom trabaja al 60 % de resolución por eje; geometría y textos conservan su
 resolución. El tráfico decorativo se interpola en cada fotograma con una tabla precalculada
 del conducto; los paquetes recuperables mantienen actualización en cada fotograma.
@@ -121,12 +121,19 @@ La resolución se adapta ante lentitud sostenida y el render se pausa al ocultar
 la pestaña. No se descargan modelos 3D externos.
 
 La calidad tiene cuatro niveles (`full`, `balanced`, `light`, `minimal`). Móvil
-comienza sin postprocesado, con menos luces y un presupuesto de un millón de
-píxeles; si Chrome informa de memoria ≤4 GiB o ≤4 hilos, comienza en `light`.
+usa inicialmente un perfil conservador durante la preparación. Tras precalentar
+los shaders se prueban dos vistas representativas, desde calidad completa hacia
+abajo, durante un máximo aproximado de dos segundos. Se elige el nivel más alto
+con un percentil 75 de tiempo de presentación ≤28 ms en móvil (24 ms en escritorio).
+Se descarta el primer fotograma de cada vista; si se agota el tiempo se usa el
+nivel mínimo y el ajuste continuo puede recuperarlo después.
 El render directo conserva ACES y la salida sRGB. Ante fotogramas sostenidos por
 encima de 38 ms en móvil (27 ms en escritorio), baja un nivel cada ~1,8 s de
 muestreo activo. Los fotogramas muy lentos también cuentan; las pausas de ≥1 s
-reinician el muestreo. Solo sube tras ~18 s con amplio margen. Los niveles
+reinician el muestreo. Solo sube tras ~10 s con amplio margen, también en móvil
+hasta calidad completa con bloom y reflejo. Si una subida provoca lentitud durante
+las primeras cinco ventanas, duplica la espera para reintentar (máximo ~60 s).
+Los niveles
 inferiores reducen luces, chispas y resolución sin limitar la frecuencia de la
 cámara, controles o pulsos del bus. La interfaz HTML conserva su resolución.
 Las variantes de shaders de los niveles inferiores se precalientan durante la
