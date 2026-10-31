@@ -10,7 +10,7 @@ import { translateText } from '../../i18n';
 export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTMLElement, state: RecoveryState, pause: (value: boolean) => void, openMemory: (index: number) => void) {
   const hud = document.createElement('div');
   hud.className = 'recovery-hud';
-  hud.innerHTML = `<div class="recovery-meter"><span>RECOVERY PROCESS</span><strong></strong><small></small></div><button class="recovery-interact" type="button" hidden></button><p class="recovery-toast" role="status" aria-live="polite"></p><p class="recovery-direction" aria-live="polite"></p>`;
+  hud.innerHTML = `<div class="recovery-meter"><span>RECOVERY PROCESS</span><strong></strong><small></small></div><button class="recovery-interact" type="button" hidden></button><p class="recovery-toast" role="status" aria-live="polite"></p>`;
   layer.append(hud);
   const pdaAccess = document.createElement('button');
   pdaAccess.className = 'pda-access';
@@ -117,9 +117,6 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
     scene.add(icon);
     return icon;
   });
-  const marker = new THREE.Mesh(new THREE.TorusGeometry(.65, .025, 4, 24), new THREE.MeshBasicMaterial({ color: recoveryBlue, toneMapped: false }));
-  marker.rotation.x = Math.PI / 2; marker.visible = false; scene.add(marker);
-  let tracked = -1;
   let nearby = -2;
   let exploring = false;
   let toastUntil = 0;
@@ -129,7 +126,6 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
   const interact = hud.querySelector<HTMLButtonElement>('.recovery-interact')!;
   const meter = hud.querySelector<HTMLElement>('.recovery-meter strong')!;
   const nearestText = hud.querySelector<HTMLElement>('.recovery-meter small')!;
-  const direction = hud.querySelector<HTMLElement>('.recovery-direction')!;
   const toast = hud.querySelector<HTMLElement>('.recovery-toast')!;
   const touchControls = matchMedia('(hover: none) and (pointer: coarse)');
   function setText(element: HTMLElement, text: string) {
@@ -214,11 +210,15 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
     summary.addEventListener('click', talk);
     modal.querySelector('.pda-objective-actions')!.prepend(summary);
     modal.querySelectorAll<HTMLButtonElement>('[data-track]').forEach(button => button.addEventListener('click', () => {
-      tracked = Number(button.dataset.track); close(); notify(`OBJETIVO / ${recoveryZones[tracked].title.toUpperCase()}`);
+      const index = Number(button.dataset.track);
+      close();
+      notify(state.zoneCount(index) === recoveryZones[index].count
+        ? `MEMORIA RESTAURADA / ${recoveryZones[index].title.toUpperCase()} · Examina los chips desde su terminal.`
+        : `${recoveryZones[index].title.toUpperCase()} / ${state.zoneCount(index)} de ${recoveryZones[index].count} · Repara los paquetes rojos de esta zona.`);
     }));
     modal.querySelector('[data-reset]')!.addEventListener('click', () => {
       show('<p class="recovery-file">NUEVA PARTIDA</p><h2 id="recovery-dialog-title">¿Reiniciar la recuperación?</h2><p>Los veinte paquetes volverán a estar corruptos y se borrará el progreso guardado. El contenido del Archivo seguirá disponible.</p><div class="recovery-actions"><button data-confirm>REINICIAR</button><button data-cancel>CONSERVAR PARTIDA</button></div>');
-      modal.querySelector('[data-confirm]')!.addEventListener('click', () => { state.reset(); tracked = -1; close(); });
+      modal.querySelector('[data-confirm]')!.addEventListener('click', () => { state.reset(); close(); });
       modal.querySelector('[data-cancel]')!.addEventListener('click', objectives);
     });
   }
@@ -229,7 +229,6 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
       const zone = recoveryZones[nearby];
       if (state.zoneCount(nearby) === zone.count) openMemory(nearby);
       else {
-        tracked = nearby;
         notify(`${zone.title.toUpperCase()} / ${state.zoneCount(nearby)} de ${zone.count} · Repara los paquetes rojos de esta zona.`);
       }
     }
@@ -280,11 +279,6 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
       const zoneIndex = recoveryZones.findIndex(zone => player.z <= zone.start + 1 && player.z >= zone.end - 1);
       setText(nearestText, !state.hasPda ? 'ACÉRCATE AL ROBOT CON EL SÍMBOLO !' : zoneIndex >= 0 ? `${recoveryZones[zoneIndex].title.toUpperCase()} ${state.zoneCount(zoneIndex)}/${recoveryZones[zoneIndex].count}` : 'BUS DE DATOS / REGISTROS EN RECUPERACIÓN');
       if (performance.now() > toastUntil) { toast.classList.remove('is-visible'); lastToast = ''; }
-      marker.visible = tracked >= 0;
-      if (tracked >= 0) {
-        const destination = terminalPositions[tracked]; marker.position.copy(destination); marker.position.y -= .25;
-        setText(direction, `${recoveryZones[tracked].title.toUpperCase()} · ${Math.round(Math.abs(player.z - destination.z))} u · ${player.z > destination.z + 2 ? 'HACIA EL FONDO DEL BUS ↓' : player.z < destination.z - 2 ? 'HACIA LA ENTRADA ↑' : 'ESTÁS EN LA ZONA · BUSCA LOS PAQUETES Y EL TERMINAL'}`);
-      } else setText(direction, '');
     },
   };
 }
