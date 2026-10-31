@@ -172,12 +172,6 @@ export function initializeLanguages() {
       } else roots.add(mutation.target);
     }
     for (const node of roots) if (node.isConnected) localize(node);
-    // Native modal dialogs live in the top layer, so they get an accessible copy.
-    let addedSwitch = false;
-    document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(dialog => {
-      if (!dialog.querySelector('.language-switcher')) { dialog.append(makeSwitch()); addedSwitch = true; }
-    });
-    if (addedSwitch) refreshSwitches();
   });
   observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: [...attributes, 'open'] });
 }
