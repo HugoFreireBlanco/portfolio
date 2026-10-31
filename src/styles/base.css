@@ -1,0 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;450;500;600&display=swap');
+
+:root{font-family:'IBM Plex Mono',monospace;color:#dfe9e5;background:#070a0b;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;--bg:#070a0b;--text:#dfe9e5;--muted:#61716d;--line:#26332f;--cyan:#8ce5cb;--red:#ff664f}
+*{box-sizing:border-box}body{margin:0;min-width:320px}button,a{-webkit-tap-highlight-color:transparent}button{font:inherit}button,a{touch-action:manipulation}button{cursor:pointer}a{color:inherit;text-decoration:none}button:disabled{cursor:wait}button:focus-visible,a:focus-visible{outline:2px solid var(--cyan);outline-offset:6px}[hidden]{display:none!important}::selection{background:var(--cyan);color:var(--bg)}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.muted{color:var(--muted)}
