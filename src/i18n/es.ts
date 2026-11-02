@@ -127,4 +127,5 @@ export default {
   coreLinkRestored: 'ENLACE RESTABLECIDO', coreIsolatedTitle: 'CORE AISLADO', coreData: 'INTEGRIDAD DE DATOS / {count} DE 20',
   coreReady: 'NÚCLEO LISTO PARA REANUDAR EL ARRANQUE', coreRestore: 'RESTAURA LOS PAQUETES PARA RESTABLECER EL ENLACE',
   archiveCode: 'SYS / ARCHIVO_PERSONAL', identityCode: 'SYS / IDENTIDAD / 0x01', projectCode: 'ARCHIVO / PROYECTO_01',
+  backHome: 'Volver al inicio', menu: 'MENÚ',
 } as const;

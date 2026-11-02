@@ -51,4 +51,5 @@ export default {
   coreLinkRestored: 'LINK RESTORED', coreIsolatedTitle: 'CORE ISOLATED', coreData: 'DATA INTEGRITY / {count} OF 20',
   coreReady: 'CORE READY TO RESUME BOOT', coreRestore: 'RESTORE PACKETS TO RECONNECT THE LINK',
   archiveCode: 'SYS / PERSONAL_ARCHIVE', identityCode: 'SYS / IDENTITY / 0x01', projectCode: 'ARCHIVE / PROJECT_01',
+  backHome: 'Back to home', menu: 'MENU',
 } satisfies Record<keyof typeof es, string>;

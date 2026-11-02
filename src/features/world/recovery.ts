@@ -33,7 +33,7 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
       acquiredNotice.innerHTML = '<strong>PDA OBTENIDA</strong><span class="pda-keyboard-notice">Pulsa <kbd>Q</kbd> para volver a abrirla.</span><span class="pda-touch-notice">Toca el botón PDA para volver a abrirla.</span>';
       acquiredNotice.classList.add('is-visible');
       window.clearTimeout(noticeTimer);
-      noticeTimer = window.setTimeout(() => acquiredNotice.classList.remove('is-visible'), 6500);
+      noticeTimer = window.setTimeout(() => acquiredNotice.classList.remove('is-visible'), 2500);
     }
   }
   const modal = document.createElement('dialog');
@@ -133,7 +133,7 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
     if (touchControls.matches) translated = translated.replace(/^\[E\]\s*/, '');
     if (element.textContent !== translated) element.textContent = translated;
   }
-  function notify(text: string) { lastToast = text; toastUntil = performance.now() + 5500; toast.textContent = text; toast.classList.add('is-visible'); }
+  function notify(text: string) { lastToast = text; toastUntil = performance.now() + 2500; toast.textContent = text; toast.classList.add('is-visible'); }
   function refresh() {
     if (sadFace) sadFace.visible = !state.complete;
     happyFace.visible = state.complete;

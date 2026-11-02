@@ -78,13 +78,20 @@ con «Omitir». Con movimiento reducido se accede directamente al escenario.
 
 ## Explorar
 
-La navegación compartida permite alternar entre **Explorar**, **Archivo** y
-**Sobre mí**, incluso antes de completar la entrada 3D. Archivo reúne proyectos,
+La portada muestra directamente la presentación de Hugo, sin preparar el mundo 3D,
+con una imagen estática del escenario (`public/world-home.jpg`) y entrada progresiva.
+La navegación tiene **Archivo** y **Explorar**; el logo vuelve a **Inicio** sin
+reiniciar la partida. En pantallas de hasta 700 px, un menú plegado por defecto
+reúne ambas secciones y el idioma; el sonido conserva su ubicación independiente.
+Solo al elegir Explorar se inicia la carga narrativa, el fallo y el tobogán.
+Archivo reúne proyectos,
 experiencia, educación, premios y aptitudes en HTML seleccionable con índice y
 desplazamiento normal. Cada proyecto abre una ficha con cierre por Escape.
-Las URLs `#archivo/educacion`, `#sobre-mi` y `#proyecto/internal-system` son
+Las URLs `#inicio`, `#archivo/educacion` y `#proyecto/internal-system` son
 compartibles y funcionan con el historial del navegador. Al leer, el mundo y las
 partículas del loader se pausan; al regresar se conserva la sesión y la recuperación.
+Tras entrar al mundo, la imagen de portada da paso al último fotograma congelado.
+El enlace antiguo `#sobre-mi` continúa abriendo Inicio.
 El contenido se centraliza en `src/features/portfolio/content.ts`. Los datos
 personales todavía no aportados se indican como pendientes, sin inventar historial.
 

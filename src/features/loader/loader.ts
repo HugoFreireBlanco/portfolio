@@ -10,14 +10,14 @@ const wait = (ms: number) => new Promise<void>(resolve => window.setTimeout(reso
 
 export function createLoader(root: HTMLElement): void {
   root.innerHTML = `
-    <main class="system-shell" data-state="booting">
+    <main class="system-shell" data-state="home">
       <div class="ambient" aria-hidden="true"></div>
       ${circuitMarkup()}
       <canvas class="data-particles" aria-hidden="true"></canvas>
       <div class="screen-texture" aria-hidden="true"></div>
       <div class="interference" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
       <header class="masthead">
-        <a class="brand" href="./" aria-label="Hugo, reiniciar inicio"><span class="brand-mark" aria-hidden="true">h<span>_</span></span><span>HUGO <span class="brand-divider">/</span> <span class="brand-sub">DEV</span></span></a>
+        <a class="brand" href="#inicio" aria-label="Volver al inicio"><span class="brand-mark" aria-hidden="true">h<span>_</span></span><span>HUGO <span class="brand-divider">/</span> <span class="brand-sub">DEV</span></span></a>
         <div class="connection"><span class="status-dot"></span><span id="signal-label">CONNECTING</span><span class="connection-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span></div>
       </header>
 
@@ -42,6 +42,11 @@ export function createLoader(root: HTMLElement): void {
 
   const get = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
   const shell = get('.system-shell');
+  root.append(...shell.querySelectorAll('.corner'));
+  const brand = get<HTMLAnchorElement>('.brand');
+  brand.classList.add('global-brand');
+  brand.title = 'Volver al inicio';
+  root.append(brand);
   const enter = get<HTMLButtonElement>('.enter-button');
   const audio = new InterfaceAudio();
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -50,7 +55,10 @@ export function createLoader(root: HTMLElement): void {
   let glitchTimer: number | undefined;
   let glitchEnd: number | undefined;
   let world: WorldController | undefined;
-  const portfolio = createPortfolio(root, reading => world?.setPaused(reading));
+  const portfolio = createPortfolio(root, reading => {
+    world?.setPaused(reading);
+    if (!reading && shell.dataset.state === 'home') queueMicrotask(() => { void boot(); });
+  });
 
   function title(first: string, second: string): void {
     for (const [id, text] of [['#title-first', first], ['#title-second', second]]) {
@@ -194,8 +202,10 @@ export function createLoader(root: HTMLElement): void {
     await wait(reducedMotion.matches ? 0 : 600);
     get('.boot-console').hidden = true;
     shell.dataset.state = 'entered';
+    root.dataset.worldEntered = 'true';
     get('#signal-label').textContent = 'RECOVERY PROCESS DEPLOYED';
     const journey = world!.enter(source);
+    world!.setPaused(portfolio.isReading());
     window.setTimeout(() => packet.remove(), reducedMotion.matches ? 0 : 500);
     await journey;
     get('#signal-label').textContent = 'LOCAL SESSION ACTIVE';
@@ -222,5 +232,6 @@ export function createLoader(root: HTMLElement): void {
     window.clearInterval(glitchTimer);
     if (!document.hidden && shell.dataset.state === 'compromised') startInterference();
   });
-  void boot();
+  get('.boot-console').hidden = true;
+  if (!portfolio.isReading()) void boot();
 }

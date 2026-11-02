@@ -7,11 +7,23 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
   navigation.className = 'portfolio-nav';
   navigation.setAttribute('aria-label', 'Navegación principal');
   const modes = [
-    { view: 'explorar', href: '#explorar', label: 'EXPLORAR', icon: '<path d="m8 2 6 3.5v7L8 16l-6-3.5v-7L8 2Z M2 5.5l6 3.6 6-3.6 M8 9v7"/>', code: '01' },
     { view: 'archivo', href: '#archivo/proyectos', label: 'ARCHIVO', icon: '<path d="M2 5h12v10H2z M1 2h14v3H1z M6 8h4"/>', code: '02' },
-    { view: 'sobre-mi', href: '#sobre-mi', label: 'SOBRE MÍ', icon: '<circle cx="8" cy="5" r="3"/><path d="M2 16v-2a6 6 0 0 1 12 0v2 M5 16h6"/>', code: '03' },
+    { view: 'explorar', href: '#explorar', label: 'EXPLORAR', icon: '<path d="m8 2 6 3.5v7L8 16l-6-3.5v-7L8 2Z M2 5.5l6 3.6 6-3.6 M8 9v7"/>', code: '01' },
   ];
-  navigation.innerHTML = modes.map(mode => `<a href="${mode.href}" data-view="${mode.view}" aria-label="${mode.label}"><svg viewBox="0 0 16 18" aria-hidden="true">${mode.icon}</svg><span class="nav-label" aria-hidden="true" data-label="${mode.label}">${mode.label}</span><small aria-hidden="true">${mode.code}</small></a>`).join('');
+  navigation.innerHTML = modes.map(mode => `<a href="${mode.href}" data-view="${mode.view}" aria-label="${mode.label}"><svg viewBox="0 0 16 18" aria-hidden="true">${mode.icon}</svg><span class="nav-label" aria-hidden="true" data-label="${mode.label}">${mode.label}</span></a>`).join('');
+  navigation.id = 'main-navigation';
+  const menu = document.createElement('button');
+  menu.className = 'mobile-menu-toggle'; menu.type = 'button';
+  menu.setAttribute('aria-controls', navigation.id); menu.setAttribute('aria-expanded', 'false');
+  menu.innerHTML = '<span aria-hidden="true"><i></i><i></i><i></i></span><small>MENU</small>';
+  function closeMenu() { document.body.classList.remove('menu-open'); menu.setAttribute('aria-expanded', 'false'); }
+  menu.addEventListener('click', () => {
+    const open = menu.getAttribute('aria-expanded') !== 'true';
+    document.body.classList.toggle('menu-open', open); menu.setAttribute('aria-expanded', String(open));
+  });
+  navigation.addEventListener('click', event => { if ((event.target as Element).closest('a')) closeMenu(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.body.classList.contains('menu-open')) { closeMenu(); menu.focus(); } });
+  document.addEventListener('click', event => { if (!(event.target as Element).closest('.mobile-menu-toggle,.portfolio-nav,.language-switcher')) closeMenu(); });
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const stopGlitches: (() => void)[] = [];
   for (const link of navigation.querySelectorAll<HTMLAnchorElement>('a')) {
@@ -70,7 +82,9 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
   }
   dialog.className = 'project-dialog';
   dialog.setAttribute('aria-labelledby', 'project-detail-title');
-  root.append(reading, navigation, dialog);
+  root.append(reading, navigation, dialog, menu);
+  reading.querySelector('.reading-topline>a')?.setAttribute('href', '#inicio');
+  reading.querySelector('.index-about')?.setAttribute('href', '#inicio');
   const directory = reading.querySelector<HTMLElement>('.archive-index')!;
   const directoryResizeObserver = new ResizeObserver(() => {
     if (directory.offsetHeight) directory.style.setProperty('--directory-height', `${directory.offsetHeight}px`);
@@ -98,7 +112,8 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
     viewAnimations.forEach(animation => animation.cancel());
     viewAnimations = [];
     if (reducedMotion.matches || view === 'explorar') return;
-    const selector = view === 'sobre-mi'
+    const firstHome = view === 'inicio' && !root.dataset.visitedHome;
+    const selector = view === 'inicio'
       ? '.about-hero>.file-code, #about-title, .about-surname, .about-grid>div>*, .about-grid>aside>*'
       : '.reading-hero>.file-code, .reading-hero>h1, .reading-intro, .hero-counter, .archive-index';
     reading.querySelectorAll<HTMLElement>(selector).forEach((element, index) => {
@@ -106,9 +121,10 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
       const animation = element.animate([
         { opacity: 0, transform: `translateY(${title ? 24 : 12}px)` },
         { opacity: 1, transform: 'translateY(0)' },
-      ], { duration: title ? 750 : 550, delay: Math.min(index * 85, 650), easing: 'cubic-bezier(.16,1,.3,1)', fill: 'backwards' });
+      ], { duration: firstHome ? title ? 1500 : 1200 : currentView === 'inicio' && root.dataset.visitedHome ? 250 : title ? 650 : 450, delay: firstHome ? 700 + Math.min(index * 120, 900) : root.dataset.visitedHome && view === 'inicio' ? 0 : Math.min(index * 55, 350), easing: 'cubic-bezier(.16,1,.3,1)', fill: 'backwards' });
       viewAnimations.push(animation);
     });
+    if (view === 'inicio') root.dataset.visitedHome = 'true';
   }
   let currentView = '';
   let lastSection = 'proyectos';
@@ -154,7 +170,7 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
   function route() {
     const [path, requested] = location.hash.slice(1).split('/');
     const isProject = path === 'proyecto' && projects.some(p => p.id === requested);
-    const view = path === 'sobre-mi' ? 'sobre-mi' : path === 'archivo' || isProject ? 'archivo' : 'explorar';
+    const view = path === 'explorar' ? 'explorar' : path === 'archivo' || isProject ? 'archivo' : 'inicio';
     const changed = view !== currentView;
     if (currentView === 'archivo' && changed) savedScroll = reading.scrollTop;
     if (changed) {
@@ -162,10 +178,10 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
       root.dataset.view = view;
       reading.hidden = view === 'explorar';
       reading.querySelector<HTMLElement>('.archive-view')!.hidden = view !== 'archivo';
-      reading.querySelector<HTMLElement>('.about-view')!.hidden = view !== 'sobre-mi';
+      reading.querySelector<HTMLElement>('.about-view')!.hidden = view !== 'inicio';
       root.querySelector<HTMLElement>('.system-shell')!.inert = view !== 'explorar';
       onReading(view !== 'explorar');
-      document.title = view === 'archivo' ? 'Archivo / Hugo' : view === 'sobre-mi' ? 'Sobre mí / Hugo' : 'HUGO / Internal system';
+      document.title = view === 'archivo' ? 'Archivo / Hugo' : view === 'inicio' ? 'Hugo Freire Blanco / Portfolio' : 'HUGO / Internal system';
       reading.scrollTop = view === 'archivo' ? savedScroll : 0;
       if (view !== 'explorar') reading.querySelector<HTMLElement>(view === 'archivo' ? '.reading-hero h1' : '#about-title')!.focus({ preventScroll: true });
     }
@@ -196,7 +212,7 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
   }
   async function transitionRoute() {
     const path = location.hash.slice(1).split('/')[0];
-    const nextView = path === 'sobre-mi' ? 'sobre-mi' : path === 'archivo' || path === 'proyecto' ? 'archivo' : 'explorar';
+    const nextView = path === 'explorar' ? 'explorar' : path === 'archivo' || path === 'proyecto' ? 'archivo' : 'inicio';
     const id = ++transitionId;
     if (!currentView || reducedMotion.matches || (nextView === currentView && !transitionAnimation)) { route(); return; }
     transitionAnimation?.cancel();
