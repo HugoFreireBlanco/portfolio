@@ -19,6 +19,23 @@ npm run preview
 
 `dist/` contiene la aplicación estática generada. No necesita backend ni cuentas.
 
+### Publicación en GitHub Pages
+
+Pages sirve los archivos compilados desde la raíz de la rama `gh-pages`.
+El código fuente permanece en `main`; no hay workflows propios de GitHub Actions.
+En Settings → Pages, la fuente es **Deploy from a branch**, `gh-pages`, `/(root)`.
+
+Para publicar una actualización desde el ordenador, con Git autenticado:
+
+```sh
+npm run deploy
+```
+
+El comando compila y publica únicamente `dist/`, junto con `.nojekyll`, en
+`gh-pages`. Utiliza un directorio temporal sin cambiar la rama de trabajo y
+conserva el historial de publicaciones. Subir código a `main` no actualiza la web
+hasta ejecutar este comando. GitHub gestiona internamente el despliegue de Pages.
+
 ## Estructura
 
 ```text
