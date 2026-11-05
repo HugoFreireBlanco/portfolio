@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { AdaptiveQuality, calibrationFits } from './adaptive-quality';
+import { createRenderMetrics } from './render-metrics';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -43,6 +44,8 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   const software = debug ? /swiftshader|llvmpipe|software/i.test(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)) : false;
   const memoryGiB = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
   const quality = new AdaptiveQuality(mobile, mobile && (memoryGiB !== undefined && memoryGiB <= 4 || navigator.hardwareConcurrency <= 4));
+  const requestedQuality = new URLSearchParams(location.search).get('quality');
+  const fixedQuality = ['full', 'balanced', 'light', 'minimal'].indexOf(requestedQuality ?? '');
   // Bound fill-rate on large displays while keeping high-density screens crisp.
   function preferredRenderRatio() {
     if (software) return .75;
@@ -75,7 +78,7 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   key.position.set(5, 20, 15);
   scene.add(key);
   const accents: THREE.PointLight[] = [];
-  for (const [x, z, color] of [[-9, -3, palette.cyan], [10, -18, palette.red], [-9, -38, palette.violet], [0, -55, palette.cyan]]) {
+  for (const [x, z, color] of [[-9, -3, palette.cyan], [10, -18, palette.red], [-9, -38, palette.violet], [0, -61, palette.cyan]]) {
     const light = new THREE.PointLight(color, 60, 25, 2);
     light.position.set(x, 4, z);
     scene.add(light);
@@ -98,16 +101,32 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   bloom.setSize = (width, height) => resizeBloom(Math.max(1, Math.round(width * .6)), Math.max(1, Math.round(height * .6)));
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
+  const metrics = createRenderMetrics(renderer, layer);
+  const detailCells: THREE.Mesh[] = [];
+  const cellCenter = new THREE.Vector3();
+  function updateVisibility() {
+    // Hysteresis prevents detail groups flickering at the distance boundary.
+    for (const mesh of detailCells) {
+      cellCenter.copy(mesh.geometry.boundingSphere!.center);
+      const distance = Math.max(0, camera.position.distanceTo(cellCenter) - mesh.geometry.boundingSphere!.radius);
+      mesh.visible = distance < (mesh.visible ? 38 : 32);
+    }
+  }
   function drawScene() {
-    // Direct rendering still applies ACES tone mapping and sRGB output, without
-    // offscreen buffers, bloom blur passes or a fullscreen output copy.
-    if (quality.level === 0) composer.render();
-    else renderer.render(scene, camera);
+    // Stable pipeline across tiers: preserve the look and adapt effect budgets.
+    composer.render();
   }
   function applyQuality() {
-    renderRatio = preferredRenderRatio();
-    renderer.setPixelRatio(renderRatio);
-    composer.setPixelRatio(renderRatio);
+    const nextRatio = preferredRenderRatio();
+    if (renderRatio !== nextRatio) {
+      renderRatio = nextRatio;
+      renderer.setPixelRatio(renderRatio);
+      composer.setPixelRatio(renderRatio);
+    }
+    // Bloom stays present; only its offscreen blur resolution changes.
+    const scale = [.6, .45, .32, .25][quality.level];
+    bloom.setSize = (width, height) => resizeBloom(Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale)));
+    bloom.setSize(innerWidth * renderRatio, innerHeight * renderRatio);
     atmosphere.setQuality(quality.level);
     environment.setQuality(quality.level);
     layer.dataset.quality = ['full', 'balanced', 'light', 'minimal'][quality.level];
@@ -201,6 +220,10 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   });
   const restoredZones = recoveryZones.map((zone, i) => recoveryState.zoneCount(i) === zone.count);
   function refreshRecovery() {
+    if (!recoveryState.hasPda && player.z < 3.6) {
+      player.set(0, 0, 6.2);
+      jumpHeight = jumpVelocity = 0; slideVelocity.set(0, 0, 0);
+    }
     recoveryZones.forEach((zone, i) => { restoredZones[i] = recoveryState.zoneCount(i) === zone.count; });
   }
   recoveryState.subscribe(refreshRecovery);
@@ -344,7 +367,7 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
       const worldZ = (-dx * Math.sin(yaw) + dz * Math.cos(yaw)) / length;
       const slideStep = (1 - Math.exp(-delta * 4)) / 4;
       const nextX = THREE.MathUtils.clamp(player.x + worldX * delta * 4.5 + slideVelocity.x * slideStep, -3.15, 3.15);
-      const nextZ = THREE.MathUtils.clamp(player.z + worldZ * delta * 4.5 + slideVelocity.z * slideStep, -53.9, 8.5);
+      const nextZ = THREE.MathUtils.clamp(player.z + worldZ * delta * 4.5 + slideVelocity.z * slideStep, -59.9, 8.5);
       slideVelocity.multiplyScalar(Math.exp(-delta * 4));
       const oldX = player.x;
       const oldZ = player.z;
@@ -355,7 +378,7 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
         if (environment.canOccupy(player.x + stepX, player.z, byte.root.rotation.y) && recovery.canOccupy(player.x + stepX, player.z)) player.x += stepX;
         if (ending.canOccupy(player.z + stepZ) && environment.canOccupy(player.x, player.z + stepZ, byte.root.rotation.y) && recovery.canOccupy(player.x, player.z + stepZ)) player.z += stepZ;
       }
-      const recovered = environment.recover(player.x, player.z, jumpHeight, byte.root.rotation.y);
+      const recovered = recovery.canRecover ? environment.recover(player.x, player.z, jumpHeight, byte.root.rotation.y) : [];
       if (recovered.length) {
         recovery.rescued(recovered);
         layer.querySelector('.world-announcement')!.textContent = `${recoveryState.count} paquetes recuperados de veinte.`;
@@ -388,7 +411,7 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
       layer.dataset.landing = `${sinceLanding.toFixed(2)},${jumpHeight.toFixed(3)},${slideVelocity.length().toFixed(3)}`;
       desiredCamera.copy(player).add(orbitOffset());
       camera.position.lerp(desiredCamera, reduced.matches ? 1 : 1 - Math.exp(-delta * 3));
-      target.copy(player).add(new THREE.Vector3(0, .45, 0));
+      target.copy(player); target.y += .45;
       cameraLook.lerp(target, reduced.matches ? 1 : 1 - Math.exp(-delta * 6));
       camera.lookAt(cameraLook);
       layer.dataset.camera = `${yaw.toFixed(2)},${pitch.toFixed(2)}`;
@@ -406,9 +429,13 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
     const delta = lastFrame ? (now - lastFrame) / 1000 : 1 / 60;
     lastFrame = now;
     // Keep the cinematic duration independent of frame rate; lower fill cost on slow GPUs.
-    if ((mode === 'explore' || mode === 'memory') && quality.sample(delta)) applyQuality();
+    if (fixedQuality < 0 && (mode === 'explore' || mode === 'memory') && quality.sample(delta)) applyQuality();
+    metrics.begin();
+    const cpuStarted = performance.now();
     update(delta);
+    updateVisibility();
     drawScene();
+    metrics.end(delta, performance.now() - cpuStarted);
     if (!paused) frame = requestAnimationFrame(render);
   }
 
@@ -542,6 +569,16 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   environment.update(0, true);
   atmosphere.update(0, reduced.matches);
   byte.root.position.copy(environment.path.getPointAt(0));
+  // Reflection contributors are selected once, not by traversing the world each
+  // frame. Lights share this layer so reflected materials retain their lighting.
+  scene.traverse(object => {
+    if (object instanceof THREE.Light) object.layers.enable(1);
+    if (!(object instanceof THREE.Mesh) || object.name === 'motherboard-floor') return;
+    if (object.userData.microDetail) detailCells.push(object);
+    if (object.userData.microDetail || object.name === 'ceiling-fault-sparks' || object.userData.skipReflection) return;
+    object.geometry.computeBoundingSphere();
+    if (object instanceof THREE.InstancedMesh || object.geometry.boundingSphere!.radius > .2) object.layers.enable(1);
+  });
   await renderer.compileAsync(scene, camera);
   drawScene();
   // Warm the actual postprocessing targets at both ends before exposing the canvas.
@@ -557,28 +594,19 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   }
   camera.position.copy(arrivalTarget).add(orbitOffset());
   camera.lookAt(arrivalTarget);
-  // Precompile lower-light shader variants behind the loader, so adapting on an
-  // older GPU does not introduce a compilation freeze while the player is moving.
-  const initialQuality = quality.level;
-  for (let level = 0; level <= 3; level++) {
-    if (level === initialQuality) continue;
-    quality.level = level;
-    applyQuality();
-    await renderer.compileAsync(scene, camera);
-    drawScene();
-    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-  }
+  // Light sets and materials stay fixed across tiers, avoiding extra shader
+  // variants and their compilation stalls during quality changes.
   // Calibrate real render work only after shaders and geometry have been warmed.
   // All views remain behind the loader; rAF measures presentation/backpressure too.
   const calibrationStarted = performance.now();
   let calibratedLevel = 3;
   for (let level = 0; level <= 3; level++) {
-    if (performance.now() - calibrationStarted > 2000) break;
+    if (performance.now() - calibrationStarted > 4500) break;
     quality.level = level;
     applyQuality();
     const samples: number[] = [];
-    for (let sample = 0; sample < 8; sample++) {
-      const depth = sample < 4 ? 0 : -24;
+    for (let sample = 0; sample < 18; sample++) {
+      const depth = sample < 9 ? 0 : -24;
       target.copy(arrivalTarget); target.z += depth;
       camera.position.copy(target).add(orbitOffset());
       camera.lookAt(target);
@@ -586,12 +614,12 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
       drawScene();
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
       // Discard the first frame of each view (uploads / target resize).
-      if (sample !== 0 && sample !== 4) samples.push(performance.now() - started);
-      if (performance.now() - calibrationStarted > 2000) break;
+      if (sample % 9 > 1) samples.push(performance.now() - started);
+      if (performance.now() - calibrationStarted > 4500) break;
     }
     if (calibrationFits(samples, mobile)) { calibratedLevel = level; break; }
   }
-  quality.level = calibratedLevel;
+  quality.level = fixedQuality >= 0 ? fixedQuality : calibratedLevel;
   layer.dataset.calibrationMs = String(Math.round(performance.now() - calibrationStarted));
   applyQuality();
   camera.position.copy(arrivalTarget).add(orbitOffset());

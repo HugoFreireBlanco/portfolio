@@ -37,29 +37,67 @@ export function createAtmosphere(scene: THREE.Scene, hemi: THREE.HemisphereLight
 
   const sources = [new THREE.Vector3(-17, 24.5, 5), new THREE.Vector3(-6.4, 8.5, -7.8)];
   const perSource = compact ? 28 : 48;
-  const sparks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), sources.length * perSource);
+  const sparkMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  const sparkUniforms = {
+    sparkTime: { value: 0 }, sparkStability: { value: 0 },
+    sparkBudget: { value: perSource }, sparkReduced: { value: 0 },
+  };
+  // Purely decorative ballistics run on the GPU. Instance transforms and colors
+  // are uploaded once; only four scalar uniforms change during the render loop.
+  sparkMaterial.onBeforeCompile = shader => {
+    Object.assign(shader.uniforms, sparkUniforms);
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', `
+      #include <common>
+      attribute vec2 sparkSeed;
+      uniform float sparkTime, sparkStability, sparkBudget, sparkReduced;
+    `).replace('#include <begin_vertex>', `
+      float source = sparkSeed.x;
+      float slot = sparkSeed.y;
+      float period = 4.8 + source * 1.3;
+      float age = mod(sparkTime + source * 1.8, period) - slot / max(sparkBudget, 1.0) * .65;
+      float life = source < .5 ? 2.3 : 1.55;
+      float t = max(0.0, age);
+      float seed = slot * 2.0 + source;
+      float angle = seed * 2.39996;
+      float speed = .7 + mod(seed * .37, 1.7);
+      vec3 velocity = vec3(cos(angle) * speed, -.6 - 8.4 * t, sin(angle) * speed);
+      vec3 axis = normalize(velocity);
+      vec3 side = normalize(cross(axis, vec3(0.0, 0.0, 1.0)));
+      vec3 front = cross(side, axis);
+      float fade = max(0.0, 1.0 - t / life);
+      float sparkVisible = float(sparkReduced < .5 && slot < sparkBudget && age >= 0.0 && age < life && slot / max(sparkBudget, 1.0) < 1.0 - sparkStability * .9);
+      vec3 transformed = (side * position.x * .04 + axis * position.y * (.22 + t * .16) + front * position.z * .04) * fade * sparkVisible;
+      transformed += vec3(velocity.x * t, -.6 * t - 4.2 * t * t, velocity.z * t);
+    `);
+  };
+  const sparks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), sparkMaterial, sources.length * perSource);
   sparks.name = 'ceiling-fault-sparks';
-  sparks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   // Fixed conservative bounds cover both emitters and their ballistic trajectories.
   sparks.boundingSphere = new THREE.Sphere(new THREE.Vector3(-11, 11, -1), 28);
   scene.add(sparks);
   const dummy = new THREE.Object3D();
   const color = new THREE.Color();
-  const velocity = new THREE.Vector3();
-  const up = new THREE.Vector3(0, 1, 0);
+  const seeds = new Float32Array(sparks.count * 2);
   let activePerSource = perSource;
   for (let i = 0; i < sparks.count; i++) {
+    const source = i % sources.length;
+    seeds[i * 2] = source; seeds[i * 2 + 1] = Math.floor(i / sources.length);
+    dummy.position.copy(sources[source]); dummy.updateMatrix();
+    sparks.setMatrixAt(i, dummy.matrix);
     color.setHex(i % 4 === 0 ? 0xffecaf : i % 3 === 0 ? 0xff541b : 0xffa43b);
     sparks.setColorAt(i, color);
   }
+  sparks.geometry.setAttribute('sparkSeed', new THREE.InstancedBufferAttribute(seeds, 2));
   return {
     setQuality(level: number) {
       // Fixed light sets avoid shader recompilation on every camera movement.
-      accents.forEach((light, index) => { light.visible = level === 0 || level === 1 && index === 1; });
-      beacons.forEach((light, index) => { light.visible = level === 0 || level < 3 && index === 1; });
+      // Lighting is part of the art direction, not a resolution tier. Keep a
+      // fixed light set: fewer shader variants and no disappearing alarm lamps.
+      accents.forEach(light => { light.visible = true; });
+      beacons.forEach(light => { light.visible = true; });
       activePerSource = level >= 3 ? 0 : level === 2 ? 8 : level === 1 ? 14 : perSource;
-      sparks.count = activePerSource * sources.length;
-      sparks.visible = sparks.count > 0;
+      sparkUniforms.sparkBudget.value = activePerSource;
+      sparks.visible = activePerSource > 0;
     },
     update(time: number, reduced: boolean, restored: readonly boolean[] = [], complete = false, delta = 1 / 60) {
       const blend = reduced ? 1 : 1 - Math.exp(-delta * .8);
@@ -84,30 +122,9 @@ export function createAtmosphere(scene: THREE.Scene, hemi: THREE.HemisphereLight
         lenses[i].color.copy(light.color); lenses[i].emissive.copy(light.color);
         lenses[i].emissiveIntensity = (.12 + alarm * 1.5) * (1 - repair) + repair * .7;
       });
-      for (let i = 0; i < sparks.count; i++) {
-        const source = Math.floor(i / activePerSource);
-        const slot = i % activePerSource;
-        const period = 4.8 + source * 1.3;
-        const age = (time + source * 1.8) % period - slot / activePerSource * .65;
-        const life = source === 0 ? 2.3 : 1.55;
-        const visible = !reduced && age >= 0 && age < life && slot / activePerSource < 1 - stability * .9;
-        const t = Math.max(0, age);
-        const angle = i * 2.39996;
-        const speed = .7 + (i * .37) % 1.7;
-        const vx = Math.cos(angle) * speed;
-        const vz = Math.sin(angle) * speed;
-        dummy.position.copy(sources[source]);
-        dummy.position.x += vx * t;
-        dummy.position.z += vz * t;
-        dummy.position.y -= .6 * t + 4.2 * t * t;
-        velocity.set(vx, -.6 - 8.4 * t, vz).normalize();
-        dummy.quaternion.setFromUnitVectors(up, velocity);
-        const fade = Math.max(0, 1 - t / life);
-        dummy.scale.set(visible ? .04 * fade : 0, visible ? (.22 + t * .16) * fade : 0, visible ? .04 * fade : 0);
-        dummy.updateMatrix();
-        sparks.setMatrixAt(i, dummy.matrix);
-      }
-      sparks.instanceMatrix.needsUpdate = true;
+      sparkUniforms.sparkTime.value = time;
+      sparkUniforms.sparkStability.value = stability;
+      sparkUniforms.sparkReduced.value = reduced ? 1 : 0;
       return alarm;
     },
   };

@@ -17,7 +17,7 @@ export function createEnding(scene: THREE.Scene, host: HTMLElement, layer: HTMLE
   const housing = new THREE.MeshStandardMaterial({ color: 0xa0abb0, metalness: .18, roughness: .48 });
   const gold = new THREE.MeshStandardMaterial({ color: 0xd6a449, metalness: .85, roughness: .27 });
   const root = new THREE.Group();
-  root.position.set(0, cableHeight(-51.8) - .15, -51.8);
+  root.position.set(0, cableHeight(-57.8) - .15, -57.8);
   scene.add(root);
   function batch(group: THREE.Group) {
     const materials = new Map<THREE.Material, THREE.Mesh[]>();
@@ -171,7 +171,7 @@ export function createEnding(scene: THREE.Scene, host: HTMLElement, layer: HTMLE
   const from = new THREE.Vector3();
   const cameraFrom = new THREE.Vector3();
   const look = new THREE.Vector3();
-  const destination = new THREE.Vector3(0, cableHeight(-54.4) + .48, -54.4);
+  const destination = new THREE.Vector3(0, cableHeight(-60.4) + .48, -60.4);
   const follow = new THREE.Vector3();
   const lookOffset = new THREE.Vector3();
   const smooth = (t: number) => t * t * (3 - 2 * t);
@@ -286,7 +286,7 @@ export function createEnding(scene: THREE.Scene, host: HTMLElement, layer: HTMLE
     event.preventDefault(); use();
   });
   return {
-    canOccupy(z: number) { return z > (state.complete && opened >= .99 ? -53.9 : -50.95); },
+    canOccupy(z: number) { return z > (state.complete && opened >= .99 ? -59.9 : -56.95); },
     update(player: THREE.Vector3, camera: THREE.PerspectiveCamera, byte: THREE.Group, active: boolean, delta: number, animate: (distance: number) => void) {
       if (state.complete) openingTime = Math.min(openingTime + delta, 8.5);
       // 3.8s signal travel, .6s latch release, then a deliberate four-second lift.
@@ -306,10 +306,10 @@ export function createEnding(scene: THREE.Scene, host: HTMLElement, layer: HTMLE
       layer.dataset.coreOpening = opened.toFixed(3);
       if (unlockTime >= 0 && unlockTime < 3.8 && !reduced.matches) {
         unlockTime += delta; pulse.visible = true;
-        pulse.position.z = THREE.MathUtils.lerp(7, -54, Math.min(unlockTime / 3.8, 1));
+        pulse.position.z = THREE.MathUtils.lerp(7, -60, Math.min(unlockTime / 3.8, 1));
         pulse.position.y = cableHeight(pulse.position.z) + .14;
       } else pulse.visible = false;
-      nearby = active && player.z < -48.7 && phase === 'idle';
+      nearby = active && player.z < -54.7 && phase === 'idle';
       prompt.hidden = !nearby;
       let promptText = translateText(state.complete ? opened < .99 ? 'LIBERANDO CONECTOR…' : '[E] REANUDAR EL SISTEMA' : `[E] EXAMINAR CORE · ${state.count}/20`);
       if (touchControls.matches) promptText = promptText.replace(/^\[E\]\s*/, '');

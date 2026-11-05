@@ -16,7 +16,12 @@ export function createTraffic(scene: THREE.Scene, state: RecoveryState) {
   const meshes = [bodies, eyes, bits, contacts, pulses];
   bodies.name = 'recovery-packet-bodies';
   eyes.name = 'recovery-packet-indicators';
-  for (const mesh of meshes) { mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false; scene.add(mesh); }
+  for (const mesh of meshes) {
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, -29), 40);
+    mesh.userData.skipReflection = mesh !== bodies;
+    scene.add(mesh);
+  }
   const dummy = new THREE.Object3D();
   const position = new THREE.Vector3();
   const offset = new THREE.Vector3();
@@ -81,7 +86,7 @@ export function createTraffic(scene: THREE.Scene, state: RecoveryState) {
     },
     recover(x: number, z: number, height: number, yaw = 0) {
       const added: string[] = [];
-      if (height > .25) return added;
+      if (height > .25 || !state.accessUnlocked) return added;
       for (let i = 0; i < count; i++) {
         if (!state.has(recoveryPackets[i].id) && touching(x, z, yaw, positions[i], rotations[i], .035)) {
           state.rescue(recoveryPackets[i].id);

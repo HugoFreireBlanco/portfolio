@@ -4,14 +4,14 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 
 /** Shared by geometry, player collision height and the background byte traffic. */
 export function cableHeight(z: number): number {
-  const t = THREE.MathUtils.clamp((10 - z) / 66, 0, 1);
+  const t = THREE.MathUtils.clamp((10 - z) / 72, 0, 1);
   return -.12 - Math.sin(t * Math.PI * 3) ** 2 * .72;
 }
 
 /** Highest support beneath a footprint, including raised cable clamps. */
 export function busSupport(z: number, halfDepth: number): number {
   let height = Math.max(cableHeight(z - halfDepth), cableHeight(z), cableHeight(z + halfDepth));
-  for (const clampZ of [8, -5, -18, -31, -44, -55]) {
+  for (const clampZ of [8, -5, -18, -31, -44, -55, -61]) {
     const clearance = Math.max(0, Math.abs(z - clampZ) - halfDepth - .1);
     if (clearance < .25) height = Math.max(height, cableHeight(clampZ) + .06 - clearance * .4);
   }
@@ -40,9 +40,9 @@ export function addHardware(scene: THREE.Scene, mobile: boolean): void {
   const burnt = new THREE.MeshStandardMaterial({ color: 0x090909, metalness: .05, roughness: .95 });
   const cyan = glow(palette.cyan, .38);
   const red = glow(palette.red, .65);
-  const pipe = (points: THREE.Vector3[], radius: number, material: THREE.Material, segments = 40, sides = 8) => {
+  const pipe = (points: THREE.Vector3[], radius: number, material: THREE.Material, segments = 40, sides = 8, parent: THREE.Object3D = scene) => {
     const mesh = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), segments, radius, sides, false), material);
-    scene.add(mesh);
+    parent.add(mesh);
     return mesh;
   };
 
@@ -50,13 +50,13 @@ export function addHardware(scene: THREE.Scene, mobile: boolean): void {
   for (let lane = 0; lane < 19; lane++) {
     const x = (lane - 9) * .38;
     const points = Array.from({ length: 100 }, (_, i) => {
-      const z = 10 - i / 99 * 66;
+      const z = 10 - i / 99 * 72;
       return new THREE.Vector3(x, cableHeight(z) - .2, z);
     });
     pipe(points, .185, lane % 5 === 0 ? satin : rubber, mobile ? 80 : 140, 8);
     if (lane % 3 === 0) pipe(points.map(p => p.clone().add(new THREE.Vector3(0, .184, 0))), .012, lane === 0 ? red : cyan, 80, 3);
   }
-  for (const z of [8, -5, -18, -31, -44, -55]) {
+  for (const z of [8, -5, -18, -31, -44, -55, -61]) {
     const y = cableHeight(z);
     box(scene, [7.4, .09, .19], [0, y + .015, z], satin);
     box(scene, [7.4, .12, .3], [0, y - .58, z], rubber);
@@ -67,7 +67,7 @@ export function addHardware(scene: THREE.Scene, mobile: boolean): void {
       scene.add(screw);
     }
   }
-  for (const z of [10, -56]) {
+  for (const z of [10, -62]) {
     const socket = new THREE.Mesh(new RoundedBoxGeometry(8.1, 1.3, 1.6, 2, .12), rubber);
     socket.position.set(0, -.7, z);
     scene.add(socket);
@@ -82,7 +82,7 @@ export function addHardware(scene: THREE.Scene, mobile: boolean): void {
       box(scene, [.018, .012, .09], [x, y + .131, z], burnt);
     }
   }
-  for (const z of [9.4, -55.4]) for (let i = 0; i < 19; i++) {
+  for (const z of [9.4, -61.4]) for (let i = 0; i < 19; i++) {
     const x = (i - 9) * .38;
     for (let rib = 0; rib < 4; rib++) {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(.195, .015, 3, 8), rubber);
@@ -150,19 +150,25 @@ export function addHardware(scene: THREE.Scene, mobile: boolean): void {
     box(scene, [18, .12, .14], [-21, 14 + i * .26, 35.4], rubber);
   }
   // Small surface mounted components and solder pads, all batched later.
+  // The lower-board kit moves with the six recovery zones; the slide stays put.
+  const scenery = new THREE.Group();
+  scenery.position.z = -6;
+  scene.add(scenery);
   for (let i = 0; i < (mobile ? 100 : 210); i++) {
     const side = i % 2 ? -1 : 1;
     const x = side * (6 + (i * 7.13) % 26);
     const z = 20 - (i * 11.37) % 86;
-    box(scene, [.65 + i % 3 * .25, .18, .4], [x, -2.96, z], i % 8 === 0 ? burnt : rubber);
-    for (const offset of [-.48, .48]) box(scene, [.17, .1, .4], [x + offset, -2.98, z], steel);
+    box(scenery, [.65 + i % 3 * .25, .18, .4], [x, -2.96, z], i % 8 === 0 ? burnt : rubber);
+    for (const offset of [-.48, .48]) box(scenery, [.17, .1, .4], [x + offset, -2.98, z], steel);
   }
 
   // A ripped auxiliary connector and hanging broken wires beside the safe route.
+  const connectorAssembly = new THREE.Group();
+  scenery.add(connectorAssembly);
   const connector = new THREE.Group();
   connector.position.set(-6.4, -.65, -9);
   connector.rotation.set(.23, -.32, -.19);
-  scene.add(connector);
+  connectorAssembly.add(connector);
   // Open shell, torn lid and retained mounting bracket instead of a floating block.
   box(connector, [2.8, .18, 1.8], [0, -.6, 0], satin);
   box(connector, [2.8, 1.25, .16], [0, -.02, -.82], burnt);
@@ -171,26 +177,31 @@ export function addHardware(scene: THREE.Scene, mobile: boolean): void {
   const lid = box(connector, [2.7, .12, 1.25], [0, .68, -.48], satin);
   lid.rotation.x = -.55;
   for (let rib = 0; rib < 5; rib++) box(connector, [.18, .08, .7], [-.9 + rib * .45, .78, -.5], burnt).rotation.x = -.55;
-  box(scene, [.3, 1.1, 2.1], [-7.8, -1.9, -9], steel);
-  box(scene, [3.8, .16, 2.4], [-6.7, -1.5, -9], satin);
-  connector.updateMatrixWorld(true);
+  box(connectorAssembly, [.3, 1.1, 2.1], [-7.8, -1.9, -9], steel);
+  box(connectorAssembly, [3.8, .16, 2.4], [-6.7, -1.5, -9], satin);
+  // Wire coordinates below are local to the kit, before its shared translation.
+  connector.updateMatrix();
   for (let i = 0; i < 8; i++) {
     const x = -.96 + i % 4 * .64;
     const y = i < 4 ? -.2 : .2;
     box(connector, [.23, .23, .2], [x, y, .66], rubber);
     box(connector, [.12, .12, .25], [x, y, .81], copper);
-    const start = connector.localToWorld(new THREE.Vector3(x, y, .94));
-    const neck = connector.localToWorld(new THREE.Vector3(x, y, 1.25));
+    const start = new THREE.Vector3(x, y, .94).applyMatrix4(connector.matrix);
+    const neck = new THREE.Vector3(x, y, 1.25).applyMatrix4(connector.matrix);
     const end = new THREE.Vector3(-8.3 + i * .18, -2.72 + (i % 3) * .1, -4.8 - i % 2 * .4);
-    pipe([start, neck, new THREE.Vector3(neck.x - .15, neck.y - .1, -7.15), new THREE.Vector3(start.x - .25, -2.5, -6.25), end], .065, i % 3 === 0 ? satin : rubber, 22, 6);
-    pipe([end, end.clone().add(new THREE.Vector3(-.14, .08, .22))], .032, copper, 2, 5);
+    pipe([start, neck, new THREE.Vector3(neck.x - .15, neck.y - .1, -7.15), new THREE.Vector3(start.x - .25, -2.5, -6.25), end], .065, i % 3 === 0 ? satin : rubber, 22, 6, connectorAssembly);
+    pipe([end, end.clone().add(new THREE.Vector3(-.14, .08, .22))], .032, copper, 2, 5, connectorAssembly);
   }
-  box(scene, [4, .03, 5], [-7, -3.03, -10], burnt);
+  box(connectorAssembly, [4, .03, 5], [-7, -3.03, -10], burnt);
   for (let i = 0; i < 16; i++) {
-    const chip = box(scene, [.3 + i % 3 * .15, .18, .4], [-5 - (i * .71) % 5, -2.85 + i % 4 * .08, -7 - (i * 1.13) % 6], i % 3 ? burnt : copper);
+    const chip = box(connectorAssembly, [.3 + i % 3 * .15, .18, .4], [-5 - (i * .71) % 5, -2.85 + i % 4 * .08, -7 - (i * 1.13) % 6], i % 3 ? burnt : copper);
     chip.rotation.set(i * .7, i * 1.4, i * .3);
   }
   // A second fractured card has a missing corner and hanging metallic pins.
+  const fracturedAssembly = new THREE.Group();
+  scenery.add(fracturedAssembly);
+  // Keep the damaged silhouette outside the row of readable RAM modules.
+  fracturedAssembly.position.set(10, 0, 3);
   const fracture = new THREE.Shape();
   fracture.moveTo(-2.25, -2.5); fracture.lineTo(2.25, -2.5);
   fracture.lineTo(2.25, .5); fracture.lineTo(1.5, .35);
@@ -198,26 +209,29 @@ export function addHardware(scene: THREE.Scene, mobile: boolean): void {
   fracture.lineTo(.4, 2.5); fracture.lineTo(-2.25, 2.5); fracture.closePath();
   const broken = new THREE.Mesh(new THREE.ExtrudeGeometry(fracture, { depth: .3, bevelEnabled: false }), pcb);
   broken.position.set(8, 1, -26);
-  scene.add(broken);
+  fracturedAssembly.add(broken);
   broken.rotation.z = .28;
   for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
     if (row === 2 && col === 2) continue;
     box(broken, [.9, .6, .12], [-1.4 + col * 1.15, -1.4 + row * 1.25, .36], rubber);
     box(broken, [.55, .025, .02], [-1.4 + col * 1.15, -1.6 + row * 1.25, .43], row === 2 ? red : cyan);
   }
-  box(scene, [5.4, .3, 1.4], [8, -2.7, -26], satin);
-  const shard = box(scene, [1.8, 2, .3], [10.7, -1.8, -25], burnt);
+  box(fracturedAssembly, [5.4, .3, 1.4], [8, -2.7, -26], satin);
+  const shard = box(fracturedAssembly, [1.8, 2, .3], [10.7, -1.8, -25], burnt);
   shard.rotation.set(.3, .5, -.5);
-  for (let i = 0; i < 12; i++) box(scene, [.08, .4 + i % 3 * .17, .08], [6 + i * .34, -1.6, -25.7], copper);
+  for (let i = 0; i < 12; i++) box(fracturedAssembly, [.08, .4 + i % 3 * .17, .08], [6 + i * .34, -1.6, -25.7], copper);
   // Recognisable TO-220 power transistors and open electromechanical relays.
   for (const side of [-1, 1]) for (let i = 0; i < 3; i++) {
     const x = side * (8.8 + i % 2 * 2.5), z = -3 - i * 16;
-    box(scene, [1.3, 1.65, .45], [x, -1.6, z], rubber);
-    box(scene, [1.3, .7, .14], [x, -.43, z - .12], steel);
+    const transistor = scenery;
+    box(transistor, [1.3, 1.65, .45], [x, -1.6, z], rubber);
+    box(transistor, [1.3, .7, .14], [x, -.43, z - .12], steel);
     const hole = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .16, 10), burnt);
-    hole.rotation.x = Math.PI / 2; hole.position.set(x, -.4, z - .02); scene.add(hole);
-    for (let pin = 0; pin < 3; pin++) box(scene, [.09, .65, .1], [x - .4 + pin * .4, -2.65, z], copper);
-    const relay = new THREE.Group(); relay.position.set(side * 12, -2.85, z - 5); scene.add(relay);
+    hole.rotation.x = Math.PI / 2; hole.position.set(x, -.4, z - .02); transistor.add(hole);
+    for (let pin = 0; pin < 3; pin++) box(transistor, [.09, .65, .1], [x - .4 + pin * .4, -2.65, z], copper);
+    const relay = new THREE.Group(); scenery.add(relay);
+    // The right middle relay sits ahead of the Education RAM socket.
+    relay.position.set(side * 12, -2.85, side === 1 && i === 1 ? -21 : z - 5);
     box(relay, [2.5, .2, 1.6], [0, 0, 0], pcb);
     const coil = new THREE.Mesh(new THREE.CylinderGeometry(.45, .45, 1.1, 12), copper);
     coil.rotation.z = Math.PI / 2; coil.position.set(-.3, .65, 0); relay.add(coil);

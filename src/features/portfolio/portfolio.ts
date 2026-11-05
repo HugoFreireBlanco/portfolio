@@ -83,6 +83,14 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
   dialog.className = 'project-dialog';
   dialog.setAttribute('aria-labelledby', 'project-detail-title');
   root.append(reading, navigation, dialog, menu);
+  const header = document.createElement('header');
+  header.className = 'site-header';
+  header.append(root.querySelector('.global-brand')!, navigation);
+  const headerStatus = document.createElement('div');
+  headerStatus.className = 'header-status';
+  headerStatus.append(reading.querySelector('.reading-topline')!, root.querySelector('.masthead .connection')!);
+  header.append(headerStatus, menu);
+  root.append(header);
   reading.querySelector('.reading-topline>a')?.setAttribute('href', '#inicio');
   reading.querySelector('.index-about')?.setAttribute('href', '#inicio');
   const directory = reading.querySelector<HTMLElement>('.archive-index')!;
@@ -177,6 +185,8 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
       currentView = view;
       root.dataset.view = view;
       reading.hidden = view === 'explorar';
+      if (view === 'explorar') root.append(header);
+      else reading.prepend(header);
       reading.querySelector<HTMLElement>('.archive-view')!.hidden = view !== 'archivo';
       reading.querySelector<HTMLElement>('.about-view')!.hidden = view !== 'inicio';
       root.querySelector<HTMLElement>('.system-shell')!.inert = view !== 'explorar';

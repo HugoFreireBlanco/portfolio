@@ -160,7 +160,7 @@ function makeSwitch() {
 }
 export function initializeLanguages() {
   document.documentElement.lang = language;
-  document.body.append(makeSwitch());
+  (document.querySelector('.site-header') ?? document.body).append(makeSwitch());
   localize(document.documentElement);
   refreshSwitches();
   const observer = new MutationObserver(mutations => {

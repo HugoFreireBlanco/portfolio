@@ -1,4 +1,5 @@
-:root{--frame-inset:32px;--screen-inset:12px;--content-edge:55px}
+:root{--frame-inset:22px;--screen-inset:12px;--content-edge:55px}
+.render-metrics{position:absolute;bottom:80px;left:var(--content-edge);z-index:10;white-space:pre;pointer-events:none;font:10px/1.7 monospace;color:#d5e3e8;background:#03070edd;padding:10px 14px;border:1px solid #7898ab55}
 #app:before{content:'';position:fixed;inset:0;background:#03070e url('/world-home.jpg') center/cover no-repeat;z-index:0;pointer-events:none;animation:home-background-in .9s both}
 #app[data-world-entered=true]:before,#app[data-view=explorar]:before{display:none}
 #app[data-view=inicio] .system-shell{visibility:hidden}
@@ -19,6 +20,7 @@
 .reading-brand{display:none}
 .reading-topline{justify-content:flex-end;min-height:30px}
 .masthead{justify-content:flex-end;min-height:50px}
+#app .system-shell[data-state=entered]>.masthead{pointer-events:none}
 .initial-reveal{animation-duration:2.4s}
 #app>.corner{position:fixed;z-index:40;pointer-events:none}
 #app>.corner--tl,#app>.corner--bl{left:var(--frame-inset)}
@@ -32,7 +34,7 @@
 @media(min-width:701px){#app .portfolio-nav{top:36px}body>.language-switcher{top:39px;right:36px}#app .reading-topline{top:36px;min-height:50px}}
 @keyframes home-background-in{from{opacity:0}to{opacity:1}}
 @media(max-width:700px){
-  :root{--frame-inset:28px;--screen-inset:8px;--content-edge:32px}
+  :root{--frame-inset:20px;--screen-inset:8px;--content-edge:32px}
   .global-brand{top:28px;left:var(--content-edge);height:50px}
   #app .system-shell{padding-top:32px;padding-bottom:29px}
   #app .system-shell[data-state=entered]>.system-footer{bottom:29px}
@@ -52,3 +54,33 @@
   #app[data-view=explorar] .world-heading{top:100px}.masthead .connection{display:none}
 }
 @media(prefers-reduced-motion:reduce){#app:before{animation:none}.initial-reveal{animation-duration:.15s}.mobile-menu-toggle i,body #app .portfolio-nav,body>.language-switcher{transition:none}}
+
+/* One real header: in the reading scroll flow, overlaying only the 3D world. */
+#app .portfolio-reading{padding-top:0}
+#app .site-header{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:24px;width:100vw;min-height:120px;padding:24px calc(var(--frame-inset) + 16px);z-index:35;box-sizing:border-box}
+#app .portfolio-reading{overflow-x:hidden}
+.portfolio-reading>.site-header{margin-inline:calc(-5vw - var(--screen-inset));margin-bottom:12px}
+#app>.site-header{position:absolute;inset:0 0 auto}
+#app .site-header .global-brand{position:static;height:50px;justify-self:start;white-space:nowrap}
+body #app .site-header .portfolio-nav{position:static;inset:auto;transform:none;width:auto;margin:0;justify-self:center}
+#app .site-header .header-status{grid-column:3;grid-row:1;display:flex;align-items:center;justify-content:flex-end;padding-right:76px;min-width:0}
+#app .site-header .reading-topline{position:static;inset:auto;min-height:0;display:flex}
+#app .site-header .reading-topline>span,#app .site-header .connection{margin:0;white-space:nowrap;font-size:9px;letter-spacing:.1em}
+#app .site-header .connection{display:none}
+#app[data-view=explorar] .site-header .reading-topline{display:none}
+#app[data-view=explorar] .site-header .connection{display:flex;align-items:center;gap:12px}
+body #app .site-header>.language-switcher{position:absolute;top:38px;right:calc(var(--frame-inset) + 16px);visibility:visible;opacity:1;pointer-events:auto}
+body:has(dialog[open]) #app .site-header>.language-switcher{visibility:hidden}
+@media(min-width:701px) and (max-width:1150px){#app .site-header .header-status{display:none}}
+@media(max-width:700px){
+  #app .site-header{grid-template-columns:1fr auto;gap:0;min-height:104px;padding:24px calc(var(--frame-inset) + 16px)}
+  .portfolio-reading>.site-header{margin-inline:-32px;margin-bottom:9px}
+  #app .site-header .header-status{display:none}
+  #app .site-header .mobile-menu-toggle{position:static;grid-column:2;grid-row:1}
+  body #app .site-header .portfolio-nav{display:none;visibility:visible;opacity:1;pointer-events:auto;grid-column:1/-1;justify-self:stretch;margin-top:16px;padding:12px 76px 12px 12px}
+  body.menu-open #app .site-header .portfolio-nav{display:flex}
+  body #app .site-header>.language-switcher{display:none;top:103px!important;right:33px!important}
+  #app .site-header>.language-switcher button{width:56px;min-height:56px;font-size:10px}
+  body.menu-open #app .site-header>.language-switcher{display:flex}
+  #app[data-view=explorar]:has(.site-header .mobile-menu-toggle[aria-expanded=true]) .world-heading{visibility:hidden}
+}

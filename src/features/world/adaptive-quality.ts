@@ -8,6 +8,7 @@ export class AdaptiveQuality {
   private upgradeDelay = 10;
   private stableSeconds = 0;
   private trialWindows = 0;
+  private slowWindows = 0;
 
   constructor(private mobile: boolean, constrained = false) {
     this.level = constrained ? 2 : mobile ? 1 : 0;
@@ -16,6 +17,7 @@ export class AdaptiveQuality {
   reset() {
     this.duration = this.slowDuration = this.fastDuration = this.samples = 0;
     this.stableSeconds = 0;
+    this.slowWindows = 0;
   }
 
   sample(seconds: number): boolean {
@@ -30,7 +32,8 @@ export class AdaptiveQuality {
     const fast = this.fastDuration / this.duration;
     const windowDuration = this.duration;
     this.duration = this.slowDuration = this.fastDuration = this.samples = 0;
-    if (slow > .3 && this.level < 3) {
+    this.slowWindows = slow > .3 ? this.slowWindows + 1 : 0;
+    if (this.slowWindows >= 2 && this.level < 3) {
       if (this.trialWindows > 0) this.upgradeDelay = Math.min(60, this.upgradeDelay * 2);
       this.trialWindows = 0;
       this.level++;
@@ -40,7 +43,7 @@ export class AdaptiveQuality {
     if (this.trialWindows > 0) this.trialWindows--;
     // All devices can reach full quality. Failed upgrades get a longer cooldown.
     this.stableSeconds = fast > .9 ? this.stableSeconds + windowDuration : 0;
-    if (this.stableSeconds >= this.upgradeDelay && this.level > 0) {
+    if (this.stableSeconds >= Math.max(18, this.upgradeDelay) && this.level > 0) {
       this.level--;
       this.trialWindows = 5;
       this.stableSeconds = 0;
@@ -52,7 +55,7 @@ export class AdaptiveQuality {
 
 /** Leave frame-time headroom instead of selecting a tier barely reaching 30fps. */
 export function calibrationFits(samples: readonly number[], mobile: boolean): boolean {
-  if (samples.length < 6 || samples.some(value => !Number.isFinite(value) || value <= 0)) return false;
+  if (samples.length < 10 || samples.some(value => !Number.isFinite(value) || value <= 0)) return false;
   const sorted = [...samples].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length * .75)] <= (mobile ? 28 : 24);
+  return sorted[Math.floor(sorted.length * .9)] <= (mobile ? 25 : 22);
 }

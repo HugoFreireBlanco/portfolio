@@ -1,8 +1,9 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createByte } from './byte';
 import { busSupport } from './hardware';
-import { label } from './materials';
+import { box, label } from './materials';
 import { corruptRed, recoveryBlue, recoveryPackets, recoveryZones, type RecoveryState } from './recovery-state';
 import './recovery.css';
 import { translateText } from '../../i18n';
@@ -27,7 +28,9 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
   let noticeTimer: number | undefined;
   let pdaPage: 'summary' | 'objectives' = 'summary';
   function finishClose() {
-    modal.close(); pause(false);
+    modal.close();
+    state.unlockAccess();
+    pause(false);
     if (acquisitionPending) {
       acquisitionPending = false;
       acquiredNotice.innerHTML = '<strong>PDA OBTENIDA</strong><span class="pda-keyboard-notice">Pulsa <kbd>Q</kbd> para volver a abrirla.</span><span class="pda-touch-notice">Toca el botón PDA para volver a abrirla.</span>';
@@ -42,8 +45,9 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
   host.append(modal);
   const npc = createByte();
   npc.light.removeFromParent();
-  npc.root.position.set(-2.85, busSupport(7.4, .4) + .42, 7.4);
-  npc.root.rotation.set(.09, .4, -.15);
+  npc.root.name = 'aux-guide';
+  npc.root.position.set(1.85, busSupport(4.8, .4) + .42, 4.8);
+  npc.root.rotation.set(.09, -.35, -.15);
   npc.root.scale.setScalar(.8);
   npc.core.emissiveIntensity = .22;
   scene.add(npc.root);
@@ -57,6 +61,50 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
   guideIcon.add(iconFrame, iconStroke, iconDot);
   guideIcon.position.copy(npc.root.position).add(new THREE.Vector3(0, .9, 0));
   scene.add(guideIcon);
+  // Two edge projectors leave the whole landing clear. Both halves retract
+  // into their own pillar only after the first PDA has actually been closed.
+  const barrierZ = 2.6;
+  const barrier = new THREE.Group();
+  barrier.name = 'aux-holographic-gate';
+  barrier.position.set(0, busSupport(barrierZ, .3) - .15, barrierZ);
+  scene.add(barrier);
+  let gateOpening = state.accessUnlocked ? 1 : 0;
+  const pillarMetal = new THREE.MeshStandardMaterial({ color: 0x253947, metalness: .7, roughness: .35 });
+  const pillarSignal = new THREE.MeshBasicMaterial({ color: corruptRed, toneMapped: false });
+  const holoMaterial = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    uniforms: { time: { value: 0 }, opacity: { value: 1 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
+    fragmentShader: `varying vec2 vUv; uniform float time; uniform float opacity;
+      void main(){
+        float lines=pow(.5+.5*sin(vUv.y*180.-time*2.),14.);
+        float grid=step(.97,fract(vUv.x*14.))+step(.97,fract(vUv.y*9.));
+        float edge=pow(abs(vUv.y-.5)*2.,10.);
+        gl_FragColor=vec4(1.,.12,.07,(.09+lines*.19+grid*.12+edge*.3)*opacity);
+      }`,
+  });
+  const gateHalves = [-1, 1].map(side => {
+    // Feet rise from the crossbeam top (-1.56), rather than hanging off the bus.
+    const footBottom = barrier.position.y - .09;
+    box(scene, [.42, footBottom + 1.56, .65], [side * 3.7, (footBottom - 1.56) / 2, barrierZ], pillarMetal);
+    box(barrier, [.48, .18, .85], [side * 3.7, 0, 0], pillarMetal);
+    box(barrier, [.28, 3.3, .4], [side * 3.7, 1.65, 0], pillarMetal);
+    box(barrier, [.07, 2.9, .44], [side * 3.7 - side * .16, 1.65, 0], pillarSignal);
+    // Two bolted jaws grip the outside conductor, clear of the walking lanes.
+    for (const z of [-.27, .27]) {
+      box(barrier, [.68, .09, .12], [side * 3.5, .1, z], pillarMetal);
+      box(barrier, [.68, .09, .12], [side * 3.5, -.47, z], pillarMetal);
+      box(barrier, [.1, .66, .12], [side * 3.79, -.185, z], pillarMetal);
+      const bolt = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, .055, 6), pillarMetal);
+      bolt.position.set(side * 3.3, .17, z); barrier.add(bolt);
+    }
+    const half = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 3.1), holoMaterial);
+    half.name = `gate-hologram-${side}`;
+    half.position.set(side * 1.85, 1.6, 0);
+    barrier.add(half);
+    return half;
+  });
   const repairMetal = new THREE.MeshStandardMaterial({ color: 0x566574, metalness: .65, roughness: .5 });
   const patch = new THREE.Mesh(new THREE.BoxGeometry(.24, .025, .22), repairMetal);
   patch.position.set(-.12, .355, .02); patch.rotation.y = -.2; npc.root.add(patch);
@@ -90,20 +138,50 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
   const happyFace = new THREE.Mesh(happyGeometry!, expressionMaterial);
   happyFace.name = 'aux-happy-face'; npc.root.add(happyFace);
   happyParts.forEach(geometry => geometry.dispose());
-  const terminals = new THREE.InstancedMesh(new THREE.BoxGeometry(.6, .65, .45), new THREE.MeshStandardMaterial({ color: 0x27353e, metalness: .6, roughness: .5 }), recoveryZones.length);
-  const screens = new THREE.InstancedMesh(new THREE.BoxGeometry(.46, .08, .47), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), recoveryZones.length);
-  const traces = new THREE.InstancedMesh(new THREE.BoxGeometry(.035, .035, 4.5), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), recoveryZones.length);
-  const brackets = new THREE.InstancedMesh(new THREE.BoxGeometry(1.15, .12, .7), new THREE.MeshStandardMaterial({ color: 0x3a4853, metalness: .7, roughness: .5 }), recoveryZones.length);
-  scene.add(terminals, screens, traces, brackets);
+  const terminals = new THREE.InstancedMesh(new RoundedBoxGeometry(.72, .44, .3, 2, .065), new THREE.MeshStandardMaterial({ color: 0x27353e, metalness: .6, roughness: .5 }), recoveryZones.length);
+  const screenMaterials = [false, true].map(ready => {
+    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 128;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#07131c'; ctx.fillRect(0, 0, 256, 128);
+    ctx.strokeStyle = ready ? '#49bbff' : '#ff4935';
+    ctx.lineWidth = 8; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.arc(64, 64, 42, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    if (ready) { ctx.moveTo(42, 64); ctx.lineTo(58, 80); ctx.lineTo(86, 49); }
+    else { ctx.moveTo(49, 49); ctx.lineTo(79, 79); ctx.moveTo(79, 49); ctx.lineTo(49, 79); }
+    ctx.stroke();
+    ctx.lineWidth = 5;
+    for (let line = 0; line < 3; line++) {
+      ctx.beginPath(); ctx.moveTo(130, 42 + line * 22); ctx.lineTo(226 - line * 18, 42 + line * 22); ctx.stroke();
+    }
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+    return new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
+  });
+  const screenGeometry = new THREE.PlaneGeometry(.53, .22);
+  const screens: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[] = [];
+  scene.add(terminals);
   const pose = new THREE.Object3D();
-  const color = new THREE.Color();
-  const terminalPositions = recoveryZones.map(zone => new THREE.Vector3(Math.sign(zone.x) * 3.9, busSupport((zone.start + zone.end) / 2, .3) + .34, (zone.start + zone.end) / 2));
+  const terminalPositions = recoveryZones.map(zone => new THREE.Vector3(Math.sign(zone.x) * 4.35, busSupport((zone.start + zone.end) / 2, .3) + .34, (zone.start + zone.end) / 2));
   const labels = recoveryZones.map((zone, i) => {
-    pose.position.copy(terminalPositions[i]); pose.updateMatrix(); terminals.setMatrixAt(i, pose.matrix);
-    pose.position.x = Math.sign(zone.x) * 3.6; pose.position.y -= .38; pose.updateMatrix(); brackets.setMatrixAt(i, pose.matrix);
-    pose.position.copy(terminalPositions[i]);
-    pose.position.y += .19; pose.updateMatrix(); screens.setMatrixAt(i, pose.matrix);
-    pose.position.y -= .48; pose.position.x = Math.sign(zone.x) * 3.45; pose.updateMatrix(); traces.setMatrixAt(i, pose.matrix);
+    const position = terminalPositions[i];
+    const stemTop = position.y - .12;
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(.12, .17, stemTop + 1.56, 12), pillarMetal);
+    stem.position.set(position.x, (stemTop - 1.56) / 2, position.z);
+    scene.add(stem);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(.29, .33, .1, 16), pillarMetal);
+    foot.position.set(position.x, -1.51, position.z); scene.add(foot);
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(.19, .19, .09, 12), repairMetal);
+    collar.position.set(position.x, stemTop - .08, position.z); scene.add(collar);
+    // Angle the inward-facing console slightly towards the approaching camera.
+    pose.rotation.set(-.35, -Math.sign(zone.x) * (Math.PI / 2 - .3), 0, 'YXZ');
+    pose.position.copy(position); pose.updateMatrix(); terminals.setMatrixAt(i, pose.matrix);
+    pose.position.copy(position).add(new THREE.Vector3(0, .035, .16).applyEuler(pose.rotation));
+    const screen = new THREE.Mesh(screenGeometry, screenMaterials[0]);
+    screen.position.copy(pose.position); screen.rotation.copy(pose.rotation);
+    screens.push(screen); scene.add(screen);
+    const controls = box(scene, [.37, .025, .025], [0, 0, 0], repairMetal);
+    controls.rotation.copy(pose.rotation);
+    controls.position.copy(position).add(new THREE.Vector3(0, -.13, .16).applyEuler(pose.rotation));
     const mesh = label(`${zone.code} / ${zone.title.toUpperCase()}`, '#9aacbb', 2.2);
     mesh.position.copy(terminalPositions[i]).add(new THREE.Vector3(0, 1.2, 0)); scene.add(mesh); return mesh;
   });
@@ -144,10 +222,8 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
     layer.dataset.recovered = String(state.count);
     layer.dataset.stable = String(state.complete);
     recoveryZones.forEach((zone, i) => {
-      color.setHex(state.zoneCount(i) === zone.count ? recoveryBlue : corruptRed);
-      screens.setColorAt(i, color); traces.setColorAt(i, color);
+      screens[i].material = screenMaterials[state.zoneCount(i) === zone.count ? 1 : 0];
     });
-    screens.instanceColor!.needsUpdate = traces.instanceColor!.needsUpdate = true;
     if (state.count < previousCount) {
       completed = recoveryZones.map(() => false); notify('NUEVA RECUPERACIÓN / Habla con AUX junto a la entrada.');
     } else if (state.count > previousCount) {
@@ -246,7 +322,12 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
     if (event.code === 'KeyQ' && state.hasPda) { event.preventDefault(); openPda(); }
   });
   return {
-    canOccupy(x: number, z: number) { return Math.hypot(x - npc.root.position.x, z - npc.root.position.z) > .78; },
+    get canRecover() { return state.accessUnlocked && gateOpening >= 1; },
+    canOccupy(x: number, z: number) {
+      return (gateOpening >= 1 || z >= barrierZ + .75)
+        && !(Math.abs(z - barrierZ) < .75 && Math.abs(x) > 3.0)
+        && Math.hypot(x - npc.root.position.x, z - npc.root.position.z) > .78;
+    },
     rescued(ids: string[]) {
     if (ids.length && !(performance.now() < toastUntil && lastToast.startsWith('REGISTRO RESTAURADO')) && !state.complete) {
         const packet = recoveryPackets.find(p => p.id === ids[0])!;
@@ -256,6 +337,18 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
     },
     update(player: THREE.Vector3, camera: THREE.Camera, active: boolean, delta: number, reduced: boolean) {
       exploring = active;
+      gateOpening = state.accessUnlocked ? Math.min(1, gateOpening + (reduced ? 1 : delta / 1.1)) : 0;
+      const gateEase = gateOpening * gateOpening * (3 - 2 * gateOpening);
+      gateHalves.forEach((half, i) => {
+        const side = i === 0 ? -1 : 1;
+        half.scale.x = Math.max(.001, 1 - gateEase);
+        half.position.x = side * (3.7 - 1.85 * (1 - gateEase));
+        half.visible = gateOpening < 1;
+      });
+      holoMaterial.uniforms.time.value = reduced ? 0 : performance.now() * .001;
+      holoMaterial.uniforms.opacity.value = 1 - gateEase * .6;
+      pillarSignal.color.setHex(state.accessUnlocked ? recoveryBlue : corruptRed);
+      layer.dataset.gate = gateOpening >= 1 ? 'open' : state.accessUnlocked ? 'opening' : 'locked';
       npc.root.rotation.z = THREE.MathUtils.lerp(npc.root.rotation.z, state.complete ? 0 : -.15, reduced ? 1 : 1 - Math.exp(-delta * 2));
       npc.root.rotation.x = THREE.MathUtils.lerp(npc.root.rotation.x, state.complete ? 0 : .09, reduced ? 1 : 1 - Math.exp(-delta * 2));
       antenna.rotation.z = state.complete ? 0 : -.4;
@@ -272,7 +365,7 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
         icon.quaternion.copy(camera.quaternion);
       });
       if (!active) return;
-      nearby = player.distanceTo(npc.root.position) < 2.5 ? -1 : -2;
+      nearby = player.distanceTo(npc.root.position) < 2.8 ? -1 : -2;
       if (nearby === -2) terminalPositions.forEach((p, i) => { if (player.distanceTo(p) < 2.4) nearby = i; });
       interact.hidden = nearby === -2;
       setText(interact, nearby === -1 ? '[E] HABLAR CON AUX' : nearby >= 0 ? `[E] ${state.zoneCount(nearby) === recoveryZones[nearby].count ? 'ABRIR' : 'EXAMINAR'} ${recoveryZones[nearby].title.toUpperCase()}` : '');

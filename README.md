@@ -117,12 +117,14 @@ Los nombres propios, tecnologías, códigos y rutas internas mantienen su identi
 - **Repetir entrada:** vuelve a reproducir la transición sin recargar recursos.
 
 El escenario es procedural y utiliza materiales metálicos, iluminación de entorno,
-reflejo planar y bloom. Las piezas estáticas se agrupan por material y tramos de
-32 unidades para descartar bloques fuera de cámara sin multiplicar excesivamente
-las llamadas de dibujo. El reflejo planar se actualiza como máximo a 20 Hz en
-calidad completa; los niveles inferiores usan el mapa de entorno metálico sin una segunda pasada de escena.
-El bloom trabaja al 60 % de resolución por eje; geometría y textos conservan su
-resolución. El tráfico decorativo se interpola en cada fotograma con una tabla precalculada
+reflejo planar y bloom. Las piezas estáticas se agrupan por material y celdas de
+32 unidades; los microdetalles se separan y se descartan a distancia con histéresis.
+El reflejo planar se actualiza en cada fotograma y conserva estructuras y personajes,
+omitiendo microdetalles, chispas y partes diminutas del tráfico mediante capas.
+Su textura usa 512/384/256/192 px según el presupuesto. El bloom conserva su aspecto
+con buffers al 60/45/32/25 % por eje. Ambos efectos permanecen en todos los niveles.
+Las chispas calculan su movimiento en el vertex shader, con matrices estáticas.
+El tráfico decorativo se interpola en cada fotograma con una tabla precalculada
 del conducto; los paquetes recuperables mantienen actualización en cada fotograma.
 La resolución se adapta ante lentitud sostenida y el render se pausa al ocultar
 la pestaña. No se descargan modelos 3D externos.
@@ -130,21 +132,26 @@ la pestaña. No se descargan modelos 3D externos.
 La calidad tiene cuatro niveles (`full`, `balanced`, `light`, `minimal`). Móvil
 usa inicialmente un perfil conservador durante la preparación. Tras precalentar
 los shaders se prueban dos vistas representativas, desde calidad completa hacia
-abajo, durante un máximo aproximado de dos segundos. Se elige el nivel más alto
-con un percentil 75 de tiempo de presentación ≤28 ms en móvil (24 ms en escritorio).
-Se descarta el primer fotograma de cada vista; si se agota el tiempo se usa el
+abajo, durante un máximo aproximado de 4,5 segundos. Se elige el nivel más alto
+con un percentil 90 de tiempo de presentación ≤25 ms en móvil (22 ms en escritorio).
+Se descartan dos fotogramas de cada vista; si se agota el tiempo se usa el
 nivel mínimo y el ajuste continuo puede recuperarlo después.
-El render directo conserva ACES y la salida sRGB. Ante fotogramas sostenidos por
-encima de 38 ms en móvil (27 ms en escritorio), baja un nivel cada ~1,8 s de
+El compositor conserva ACES, sRGB y bloom. Ante fotogramas sostenidos por
+encima de 38 ms en móvil (27 ms en escritorio), baja tras dos ventanas de ~1,8 s de
 muestreo activo. Los fotogramas muy lentos también cuentan; las pausas de ≥1 s
-reinician el muestreo. Solo sube tras ~10 s con amplio margen, también en móvil
+reinician el muestreo. Solo sube tras al menos ~18 s con amplio margen, también en móvil
 hasta calidad completa con bloom y reflejo. Si una subida provoca lentitud durante
 las primeras cinco ventanas, duplica la espera para reintentar (máximo ~60 s).
-Los niveles
-inferiores reducen luces, chispas y resolución sin limitar la frecuencia de la
-cámara, controles o pulsos del bus. La interfaz HTML conserva su resolución.
-Las variantes de shaders de los niveles inferiores se precalientan durante la
-carga para evitar compilaciones al reducir la calidad durante el recorrido.
+Los niveles inferiores reducen chispas y presupuestos de resolución sin limitar
+la frecuencia de cámara, controles o pulsos. Las luces mantienen un conjunto fijo,
+evitando cambios bruscos de iluminación y variantes nuevas de shaders.
+La interfaz HTML conserva su resolución.
+
+Diagnóstico opcional: `?perf=1#explorar` muestra p95 de fotogramas, tiempo de CPU
+de actualización/envío, tiempo GPU si la extensión está disponible y dibujos/triángulos
+de todas las pasadas. Las consultas GPU son asíncronas. Para comparaciones reproducibles,
+`?perf=1&quality=full#explorar` fija el nivel (`balanced`, `light`, `minimal` también).
+Sin estos parámetros no se crea el panel ni se realizan consultas de diagnóstico.
 
 El haz consta de 19 conductores; su función de altura se comparte entre la
 geometría, el protagonista y los bytes secundarios. El tráfico usa geometrías
