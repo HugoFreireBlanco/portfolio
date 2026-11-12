@@ -5,6 +5,7 @@ import { createParticles } from './particles';
 import type { WorldController } from '../world/world';
 import { createPortfolio } from '../portfolio/portfolio';
 import { getLanguage } from '../../i18n';
+import { unlockArchive } from '../portfolio/archive-access';
 
 const wait = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
 
@@ -55,6 +56,8 @@ export function createLoader(root: HTMLElement): void {
   let glitchTimer: number | undefined;
   let glitchEnd: number | undefined;
   let world: WorldController | undefined;
+  let worldEntered = false;
+  try { worldEntered = sessionStorage.getItem('hugo-world-entered-v1') === 'true'; } catch { /* Optional session save. */ }
   const portfolio = createPortfolio(root, reading => {
     world?.setPaused(reading);
     if (!reading && shell.dataset.state === 'home') queueMicrotask(() => { void boot(); });
@@ -100,6 +103,22 @@ export function createLoader(root: HTMLElement): void {
   async function boot(): Promise<void> {
     if (running) return;
     running = true;
+    if (worldEntered) {
+      try {
+        if (!world) {
+          const { prepareWorld } = await import('../world/world');
+          world = await prepareWorld(root);
+          world.setPaused(portfolio.isReading());
+          world.resume();
+        }
+        shell.dataset.state = 'entered';
+        root.dataset.worldEntered = 'true';
+        get('.boot-console').hidden = true;
+        get('#signal-label').textContent = 'LOCAL SESSION ACTIVE';
+        running = false;
+        return;
+      } catch { worldEntered = false; }
+    }
     window.clearInterval(glitchTimer);
     shell.dataset.state = 'booting';
     get('.boot-console').hidden = false;
@@ -172,6 +191,7 @@ export function createLoader(root: HTMLElement): void {
       glitch();
       startInterference();
     } catch {
+      unlockArchive();
       shell.dataset.state = 'error';
       title('INITIALIZATION', 'FAILED.');
       get('#phase-label').textContent = 'NO SE PUDO PREPARAR LA INTERFAZ';
@@ -203,6 +223,8 @@ export function createLoader(root: HTMLElement): void {
     get('.boot-console').hidden = true;
     shell.dataset.state = 'entered';
     root.dataset.worldEntered = 'true';
+    worldEntered = true;
+    try { sessionStorage.setItem('hugo-world-entered-v1', 'true'); } catch { /* Optional session save. */ }
     get('#signal-label').textContent = 'RECOVERY PROCESS DEPLOYED';
     const journey = world!.enter(source);
     world!.setPaused(portfolio.isReading());

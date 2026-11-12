@@ -1,0 +1,20 @@
+.backup-console { position: fixed; z-index: 30; inset: auto auto 24px 24px; width: min(290px, calc(100% - 48px)); margin: 0; padding: 16px; border: 1px solid #597783; border-top: 2px solid #d48654; background: #081017ed; color: #bfcfd6; font: 11px/1.7 'IBM Plex Mono', monospace; box-shadow: 0 18px 70px #0009; }
+.backup-console[hidden], .backup-physical-button[hidden] { display: none; }
+.backup-physical-button { position: fixed; z-index: 31; width: 66px; height: 48px; transform: translate(-50%, -50%); border: 1px solid #ffb27899; border-radius: 4px; background: #ff7b3012; box-shadow: 0 0 24px #ff6a3433; cursor: pointer; }
+.backup-physical-button:hover, .backup-physical-button:focus-visible { outline: 2px solid #ffd2a2; outline-offset: 5px; background: #ff7b3033; box-shadow: 0 0 36px #ff6a3466; }
+.backup-console::backdrop { background: linear-gradient(transparent 40%, #0005); }
+.backup-code { color: #a7957e; font-size: 9px; letter-spacing: .12em; }
+.backup-console h2 { color: #e0ebed; font-size: 20px; font-weight: 400; }
+.backup-console-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.backup-console button { min-height: 44px; padding: 10px 15px; border: 1px solid #506471; color: #a9bec8; background: #142029; font: inherit; cursor: pointer; }
+.backup-console [data-load] { border-color: #ff754d; color: #ff9a70; background: #38211a; }
+.backup-console button:focus-visible { outline: 2px solid #9bd8eb; outline-offset: 4px; }
+.backup-console button:disabled { opacity: .5; cursor: wait; }
+.backup-status { color: #91cadc; margin-bottom: 0; }
+.backup-status:empty { display: none; }
+.backup-tape-curtain { display: none; position: fixed; inset: -4px; z-index: 10000; pointer-events: all; background: #000206; }
+.backup-tape-curtain.is-active { display: block; }
+.is-backup-covering :is(.site-header, .portfolio-nav) { visibility: hidden; }
+.world-layer[data-mode="backup"] :is(.world-heading, .world-bottom, .mobile-controls, .recovery-hud) { visibility: hidden; }
+.world-layer[data-mode="backup"] .skip-transit { display: none; }
+@media (max-width: 700px) { .backup-console { left: 16px; width: calc(100% - 32px); padding: 10px 14px; font-size: 10px; bottom: max(12px, env(safe-area-inset-bottom)); } .backup-console h2 { font-size: 14px; margin: 4px 0; } .backup-console p { margin: 4px 0; } .backup-console-actions { margin-top: 6px; } }

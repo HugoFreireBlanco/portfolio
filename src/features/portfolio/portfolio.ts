@@ -1,6 +1,8 @@
 import { archiveSections, profile, projects, memoryRecords, memoryRecordMarkup } from './content';
 import './portfolio.css';
 import { translateText } from '../../i18n';
+import { createScrollLight } from './scroll-light';
+import { hasArchiveAccess } from './archive-access';
 
 export function createPortfolio(root: HTMLElement, onReading: (reading: boolean) => void) {
   const navigation = document.createElement('nav');
@@ -12,6 +14,18 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
   ];
   navigation.innerHTML = modes.map(mode => `<a href="${mode.href}" data-view="${mode.view}" aria-label="${mode.label}"><svg viewBox="0 0 16 18" aria-hidden="true">${mode.icon}</svg><span class="nav-label" aria-hidden="true" data-label="${mode.label}">${mode.label}</span></a>`).join('');
   navigation.id = 'main-navigation';
+  function syncAccess() {
+    const locked = !hasArchiveAccess();
+    navigation.classList.toggle('is-locked', locked);
+    for (const link of root.querySelectorAll<HTMLAnchorElement>('.portfolio-nav a, .global-brand')) {
+      if (locked) { link.setAttribute('aria-disabled', 'true'); link.tabIndex = -1; }
+      else { link.removeAttribute('aria-disabled'); link.removeAttribute('tabindex'); }
+    }
+  }
+  root.addEventListener('click', event => {
+    if (!hasArchiveAccess() && (event.target as Element).closest('.portfolio-nav a, .global-brand')) event.preventDefault();
+  }, true);
+  window.addEventListener('archiveaccess', syncAccess);
   const menu = document.createElement('button');
   menu.className = 'mobile-menu-toggle'; menu.type = 'button';
   menu.setAttribute('aria-controls', navigation.id); menu.setAttribute('aria-expanded', 'false');
@@ -94,15 +108,22 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
   reading.querySelector('.reading-topline>a')?.setAttribute('href', '#inicio');
   reading.querySelector('.index-about')?.setAttribute('href', '#inicio');
   const directory = reading.querySelector<HTMLElement>('.archive-index')!;
+  directory.querySelectorAll('[data-section]>span').forEach(arrow => arrow.remove());
+  const directoryDot = document.createElement('i');
+  directoryDot.className = 'directory-dot';
+  directoryDot.setAttribute('aria-hidden', 'true');
+  directory.append(directoryDot);
   const directoryResizeObserver = new ResizeObserver(() => {
     if (directory.offsetHeight) directory.style.setProperty('--directory-height', `${directory.offsetHeight}px`);
+    scheduleDirectorySync();
   });
   directoryResizeObserver.observe(directory);
   const curtain = document.createElement('div');
   curtain.className = 'view-transition-curtain';
   curtain.setAttribute('aria-hidden', 'true');
   root.append(curtain);
-  const revealElements = [...reading.querySelectorAll<HTMLElement>('.archive-section>header, .project-visual, .project-heading, .project-record>p, .project-record>.tech-tags, .pending-record, .skill-record, .reading-footer')];
+  const updateScrollLight = createScrollLight(reading, reducedMotion);
+  const revealElements = [...reading.querySelectorAll<HTMLElement>('.project-visual, .project-record>p, .project-record>.tech-tags, .pending-record, .skill-record, .reading-footer')];
   const revealObserver = new IntersectionObserver(entries => {
     for (const entry of entries) if (entry.isIntersecting) {
       entry.target.classList.add('is-revealed');
@@ -148,11 +169,24 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
       if (link.dataset.section === section) link.setAttribute('aria-current', 'location');
       else link.removeAttribute('aria-current');
     }
+    positionDirectoryDot();
+  }
+
+  function positionDirectoryDot() {
+    const active = sectionLinks.find(link => link.hasAttribute('aria-current'));
+    if (!active || !active.offsetHeight) return;
+    const compact = matchMedia('(max-width: 700px), (max-height: 500px) and (pointer: coarse)').matches;
+    directoryDot.style.transform = compact
+      ? `translate3d(${active.offsetLeft + active.offsetWidth / 2 - 4}px, ${active.offsetTop + active.offsetHeight + 3}px, 0)`
+      : `translate3d(0, ${active.offsetTop + active.offsetHeight / 2 - 4}px, 0)`;
+    directoryDot.classList.add('is-positioned');
   }
 
   function syncDirectory() {
     scrollFrame = 0;
+    updateScrollLight();
     if (currentView !== 'archivo' || dialog.open) return;
+    positionDirectoryDot();
     const mobile = matchMedia('(max-width: 700px), (max-height: 500px) and (pointer: coarse)').matches;
     const marker = reading.getBoundingClientRect().top + (mobile ? 230 : 190);
     let section = sectionIds[0];
@@ -174,8 +208,10 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
   }
   reading.addEventListener('scroll', scheduleDirectorySync, { passive: true });
   window.addEventListener('resize', scheduleDirectorySync);
+  window.addEventListener('languagechange', scheduleDirectorySync);
 
   function route() {
+    if (!hasArchiveAccess() && location.hash !== '#explorar') history.replaceState(history.state, '', '#explorar');
     const [path, requested] = location.hash.slice(1).split('/');
     const isProject = path === 'proyecto' && projects.some(p => p.id === requested);
     const view = path === 'explorar' ? 'explorar' : path === 'archivo' || isProject ? 'archivo' : 'inicio';
@@ -219,6 +255,7 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
       if (view === 'archivo') returnFocus?.focus({ preventScroll: true });
     }
     if (changed) animateEntrance(view);
+    scheduleDirectorySync();
   }
   async function transitionRoute() {
     const path = location.hash.slice(1).split('/')[0];
@@ -252,6 +289,7 @@ export function createPortfolio(root: HTMLElement, onReading: (reading: boolean)
     viewAnimations.forEach(animation => animation.cancel());
     route();
   });
+  syncAccess();
   route();
   return { isReading: () => currentView !== 'explorar' };
 }

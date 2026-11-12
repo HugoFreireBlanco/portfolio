@@ -16,10 +16,12 @@ import { createRecoveryState, recoveryBlue, recoveryZones } from './recovery-sta
 import { createRecovery } from './recovery';
 import { createEnding } from './ending';
 import { createMemory } from './memory';
+import { createBackup } from './backup';
 import './world.css';
 
 export interface WorldController {
   enter: (source: DOMRect) => Promise<void>;
+  resume: () => void;
   setPaused: (paused: boolean) => void;
 }
 
@@ -154,7 +156,7 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   let lastFrame = 0;
   let landedAt = 0;
   let transitTime = 0;
-  let mode: 'idle' | 'forming' | 'transit' | 'falling' | 'explore' | 'ending' | 'memory' = 'idle';
+  let mode: 'idle' | 'forming' | 'transit' | 'falling' | 'explore' | 'ending' | 'memory' | 'backup' = 'idle';
   let jumpVelocity = 0;
   let jumpHeight = 0;
   let formationResolve: (() => void) | undefined;
@@ -195,10 +197,16 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
     recovery.update(player, camera, !active, 0, reduced.matches);
     if (!active) renderer.domElement.focus({ preventScroll: true });
   }, value => { dialoguePaused = value; applyPause(); });
+  const backup = createBackup(scene, host, layer, recoveryState, camera, active => {
+    resetJoystick(); keys.clear(); drag.active = false;
+    mode = active ? 'backup' : 'explore'; layer.dataset.mode = mode;
+    recovery.update(player, camera, !active, 0, reduced.matches);
+    if (!active && !externalPaused) renderer.domElement.focus({ preventScroll: true });
+  });
   const recovery = createRecovery(scene, layer, host, recoveryState, value => {
     dialoguePaused = value;
     applyPause();
-  }, index => memory.open(index));
+  }, index => memory.open(index), backup);
   const ending = createEnding(scene, host, layer, recoveryState, stage => {
     resetJoystick();
     keys.clear(); drag.active = false;
@@ -421,6 +429,7 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
     recovery.update(player, camera, mode === 'explore', delta, reduced.matches);
     ending.update(player, camera, byte.root, mode === 'explore', wallDelta, byte.animate);
     memory.update(wallDelta);
+    backup.update(wallDelta);
   }
 
   function render(): void {
@@ -629,6 +638,32 @@ export async function prepareWorld(host: HTMLElement): Promise<WorldController> 
   drawScene();
   return {
     enter,
-    setPaused(value) { externalPaused = value; if (value) memory.cancel(); applyPause(); },
+    resume() {
+      if (mode !== 'idle') return;
+      land();
+      try {
+        const saved = JSON.parse(sessionStorage.getItem('hugo-world-position-v1') || 'null');
+        if (Array.isArray(saved) && saved.length === 2 && saved.every(Number.isFinite)) {
+          player.x = THREE.MathUtils.clamp(saved[0], -3.15, 3.15);
+          player.z = THREE.MathUtils.clamp(saved[1], recoveryState.accessUnlocked ? -59.9 : 3.35, 8.5);
+          player.y = byteSupport(player.z, byte.root.quaternion, byte.root.scale);
+          byte.root.position.copy(player);
+          camera.position.copy(player).add(orbitOffset());
+          cameraLook.copy(player).add(new THREE.Vector3(0, .45, 0)); camera.lookAt(cameraLook);
+        }
+      } catch { /* An unavailable or invalid save uses the landing. */ }
+      layer.hidden = false;
+      applyPause();
+    },
+    setPaused(value) {
+      externalPaused = value;
+      if (value) {
+        memory.cancel();
+        if (mode !== 'idle') {
+          try { sessionStorage.setItem('hugo-world-position-v1', JSON.stringify([player.x, player.z])); } catch { /* Optional session save. */ }
+        }
+      }
+      applyPause();
+    },
   };
 }

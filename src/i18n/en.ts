@@ -1,6 +1,12 @@
 import type es from './es';
 
 export default {
+  backupAlternative: 'You can also consult the latest backup. There is an old tape drive to your left: it still works. Activate it if you would rather access the portfolio directly in text mode.',
+  backupTitle: 'Latest backup available.',
+  backupDescription: 'Read the portfolio in text mode. Your progress on the bus will be saved.',
+  backupLoad: 'LOAD LATEST BACKUP ↗', backupReturn: 'BACK TO THE BUS', backupReading: 'Reading tape…',
+  backupPrompt: '[E] CONSULT BACKUP', backupLast: 'LATEST BACKUP', backupLabel: 'ARCHIVE / BACKUP',
+  backupObjectives: 'Repair red packets by touching them. Each group restores a system record. To read the portfolio in text mode, use the backup drive beside AUX.',
   explore: 'EXPLORE', archive: 'ARCHIVE', about: 'ABOUT ME', mainNav: 'Main navigation', language: 'Language', spanish: 'Spanish', english: 'English',
   home: 'Hugo, restart home', connecting: 'CONNECTING', initializing: 'PERSONAL PORTFOLIO / INITIALIZING', developer: 'SOFTWARE DEVELOPER', loading: 'LOADING PORTFOLIO DATA…',
   progress: 'Narrative connection sequence', log: 'Connection log', press: 'PRESS', enter: 'TO ENTER', tapEnter: 'TAP TO ENTER',

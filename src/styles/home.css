@@ -1,9 +1,9 @@
 :root{--frame-inset:22px;--screen-inset:12px;--content-edge:55px}
 .render-metrics{position:absolute;bottom:80px;left:var(--content-edge);z-index:10;white-space:pre;pointer-events:none;font:10px/1.7 monospace;color:#d5e3e8;background:#03070edd;padding:10px 14px;border:1px solid #7898ab55}
 #app:before{content:'';position:fixed;inset:0;background:#03070e url('/world-home.jpg') center/cover no-repeat;z-index:0;pointer-events:none;animation:home-background-in .9s both}
-#app[data-world-entered=true]:before,#app[data-view=explorar]:before{display:none}
+#app[data-view=explorar]:before{display:none}
 #app[data-view=inicio] .system-shell{visibility:hidden}
-#app[data-view=inicio] .world-layer{pointer-events:none}
+#app[data-view=inicio] .world-layer{pointer-events:none;visibility:hidden}
 #app[data-view=inicio] .world-layer>:not(.world-viewport){visibility:hidden}
 .portfolio-reading{inset:0;padding:calc(120px + var(--screen-inset)) calc(5vw + var(--screen-inset)) var(--screen-inset);background:linear-gradient(90deg,#060b10e8,#080e14bd 60%,#090f1688)}
 #app[data-view=inicio] .portfolio-reading{background:linear-gradient(90deg,#050b12ec,#071019c9 55%,#07101977)}
@@ -79,7 +79,7 @@ body:has(dialog[open]) #app .site-header>.language-switcher{visibility:hidden}
   #app .site-header .mobile-menu-toggle{position:static;grid-column:2;grid-row:1}
   body #app .site-header .portfolio-nav{display:none;visibility:visible;opacity:1;pointer-events:auto;grid-column:1/-1;justify-self:stretch;margin-top:16px;padding:12px 76px 12px 12px}
   body.menu-open #app .site-header .portfolio-nav{display:flex}
-  body #app .site-header>.language-switcher{display:none;top:103px!important;right:33px!important}
+  body #app .site-header>.language-switcher{display:none;top:103px!important;right:calc(var(--frame-inset) + 29px)!important}
   #app .site-header>.language-switcher button{width:56px;min-height:56px;font-size:10px}
   body.menu-open #app .site-header>.language-switcher{display:flex}
   #app[data-view=explorar]:has(.site-header .mobile-menu-toggle[aria-expanded=true]) .world-heading{visibility:hidden}

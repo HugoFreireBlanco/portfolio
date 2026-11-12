@@ -1,4 +1,10 @@
 export default {
+  backupAlternative: 'También puedes consultar la última copia de seguridad. A tu izquierda hay una unidad de cinta antigua: todavía funciona. Actívala si prefieres acceder directamente al portfolio en modo texto.',
+  backupTitle: 'Última copia disponible.',
+  backupDescription: 'Consulta el portfolio en modo texto. El progreso del bus quedará guardado.',
+  backupLoad: 'CARGAR ÚLTIMA COPIA ↗', backupReturn: 'VOLVER AL BUS', backupReading: 'Leyendo cinta…',
+  backupPrompt: '[E] CONSULTAR BACKUP', backupLast: 'ÚLTIMO BACKUP', backupLabel: 'ARCHIVO / BACKUP',
+  backupObjectives: 'Repara los paquetes rojos por contacto. Cada grupo devuelve un registro al sistema. Para consultar el portfolio en modo texto, utiliza la unidad de backup junto a AUX.',
   explore: 'EXPLORAR', archive: 'ARCHIVO', about: 'SOBRE MÍ',
   mainNav: 'Navegación principal', language: 'Idioma', spanish: 'Español', english: 'Inglés',
   home: 'Hugo, reiniciar inicio', connecting: 'CONECTANDO', initializing: 'PORTFOLIO PERSONAL / INICIALIZANDO',

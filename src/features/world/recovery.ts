@@ -8,7 +8,7 @@ import { corruptRed, recoveryBlue, recoveryPackets, recoveryZones, type Recovery
 import './recovery.css';
 import { translateText } from '../../i18n';
 
-export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTMLElement, state: RecoveryState, pause: (value: boolean) => void, openMemory: (index: number) => void) {
+export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTMLElement, state: RecoveryState, pause: (value: boolean) => void, openMemory: (index: number) => void, backup: { isNearby: (player: THREE.Vector3) => boolean; open: () => void }) {
   const hud = document.createElement('div');
   hud.className = 'recovery-hud';
   hud.innerHTML = `<div class="recovery-meter"><span>RECOVERY PROCESS</span><strong></strong><small></small></div><button class="recovery-interact" type="button" hidden></button><p class="recovery-toast" role="status" aria-live="polite"></p>`;
@@ -266,19 +266,25 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
     const complete = state.complete;
     pdaPage = 'summary';
     if (!state.hasPda) { state.greet(); acquisitionPending = true; }
-    show(`<p class="recovery-file">AUX / PAQUETE DE MANTENIMIENTO</p><h2 id="recovery-dialog-title">${complete ? 'Lo has conseguido.' : state.count ? 'La señal está volviendo.' : 'Todavía queda un proceso limpio.'}</h2><p>${complete ? 'Has recuperado los veinte paquetes y reconstruido todos los registros. La alarma se ha detenido. El hardware sigue dañado, pero la información está a salvo. Gracias por volver.' : state.count ? `Llevas ${state.count} de 20 paquetes recuperados. Los grupos circulan cerca de sus terminales. Abre los objetivos para localizar los que faltan.` : 'El ataque ha corrompido los paquetes que transportan los registros de Hugo. Soy AUX; mi oruga está averiada y no puedo ir a buscarlos.'}</p>${complete ? '' : '<p>Acércate a un paquete rojo hasta tocar su carcasa: tu señal lo reparará y sus indicadores pasarán a azul. Cada grupo reconstruye un registro distinto.</p><p>No tienes que perseguirlos por todo el ordenador: cada grupo circula en su propia zona. Los primeros paquetes de Identidad están justo delante.</p>'}<div class="recovery-actions"><button data-understood>ENTENDIDO</button><button data-objectives>VER OBJETIVOS</button><a href="#archivo/proyectos" data-read>PREFIERO LEER EL ARCHIVO ↗</a></div>`);
-    modal.querySelector('[data-understood]')?.remove();
+    const heading = complete ? 'Lo has conseguido.' : state.count ? 'La señal está volviendo.' : 'Todavía queda un proceso limpio.';
+    const introduction = complete
+      ? 'Has recuperado los veinte paquetes y reconstruido todos los registros. La alarma se ha detenido. El hardware sigue dañado, pero la información está a salvo. Gracias por volver.'
+      : state.count ? `Llevas ${state.count} de 20 paquetes recuperados. Los grupos circulan cerca de sus terminales. Abre los objetivos para localizar los que faltan.`
+      : 'El ataque ha corrompido los paquetes que transportan los registros de Hugo. Soy AUX; mi oruga está averiada y no puedo ir a buscarlos.';
+    show(`<p class="recovery-file">AUX / PAQUETE DE MANTENIMIENTO</p><h2 id="recovery-dialog-title">${heading}</h2><p>${introduction}</p>
+      ${complete ? '' : '<p>Acércate a un paquete rojo hasta tocar su carcasa: tu señal lo reparará y sus indicadores pasarán a azul. Cada grupo reconstruye un registro distinto.</p><p>No tienes que perseguirlos por todo el ordenador: cada grupo circula en su propia zona. Los primeros paquetes de Identidad están justo delante.</p>'}
+      <p>También puedes consultar la última copia de seguridad. A tu izquierda hay una unidad de cinta antigua: todavía funciona. Actívala si prefieres acceder directamente al portfolio en modo texto.</p>
+      <div class="recovery-actions"><button data-objectives>VER OBJETIVOS</button></div>`);
     if (complete) {
       const next = document.createElement('p');
       next.textContent = 'El CORE al final del bus ya está desbloqueado. Acércate a su conector y reanuda el sistema para completar la carga que quedó interrumpida.';
       modal.querySelector('.recovery-actions')!.before(next);
     }
     modal.querySelector('[data-objectives]')!.addEventListener('click', objectives);
-    modal.querySelector('[data-read]')!.addEventListener('click', close);
   }
   function objectives() {
     pdaPage = 'objectives';
-    show(`<p class="recovery-file">RECONSTRUIR PETICIÓN / ARCHIVO DE HUGO</p><h2 id="recovery-dialog-title">Recupera la información.</h2><p>Repara los paquetes rojos por contacto. Cada grupo devuelve un registro al sistema. Puedes leer el portfolio directamente en Archivo cuando quieras.</p><div class="recovery-objectives">${recoveryZones.map((zone, i) => `<button data-track="${i}" data-restored="${state.zoneCount(i) === zone.count}"><span>${zone.code} / ${zone.title}</span><strong>${state.zoneCount(i)} / ${zone.count}</strong><small>${state.zoneCount(i) === zone.count ? 'RESTAURADO · LOCALIZAR TERMINAL' : 'PENDIENTE · LOCALIZAR PAQUETES'} ↗</small></button>`).join('')}</div><div class="pda-objective-actions"><button class="reset-recovery" data-reset>REINICIAR RECUPERACIÓN</button></div>`);
+    show(`<p class="recovery-file">RECONSTRUIR PETICIÓN / ARCHIVO DE HUGO</p><h2 id="recovery-dialog-title">Recupera la información.</h2><p>Repara los paquetes rojos por contacto. Cada grupo devuelve un registro al sistema. Para consultar el portfolio en modo texto, utiliza la unidad de backup junto a AUX.</p><div class="recovery-objectives">${recoveryZones.map((zone, i) => `<button data-track="${i}" data-restored="${state.zoneCount(i) === zone.count}"><span>${zone.code} / ${zone.title}</span><strong>${state.zoneCount(i)} / ${zone.count}</strong><small>${state.zoneCount(i) === zone.count ? 'RESTAURADO · LOCALIZAR TERMINAL' : 'PENDIENTE · LOCALIZAR PAQUETES'} ↗</small></button>`).join('')}</div><div class="pda-objective-actions"><button class="reset-recovery" data-reset>REINICIAR RECUPERACIÓN</button></div>`);
     const summary = document.createElement('button');
     summary.type = 'button';
     summary.className = 'pda-summary';
@@ -300,7 +306,8 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
   }
   function use() {
     if (!exploring || modal.open) return;
-    if (nearby === -1) talk();
+    if (nearby === -3) backup.open();
+    else if (nearby === -1) talk();
     else if (nearby >= 0) {
       const zone = recoveryZones[nearby];
       if (state.zoneCount(nearby) === zone.count) openMemory(nearby);
@@ -367,8 +374,9 @@ export function createRecovery(scene: THREE.Scene, layer: HTMLElement, host: HTM
       if (!active) return;
       nearby = player.distanceTo(npc.root.position) < 2.8 ? -1 : -2;
       if (nearby === -2) terminalPositions.forEach((p, i) => { if (player.distanceTo(p) < 2.4) nearby = i; });
+      if (nearby === -2 && backup.isNearby(player)) nearby = -3;
       interact.hidden = nearby === -2;
-      setText(interact, nearby === -1 ? '[E] HABLAR CON AUX' : nearby >= 0 ? `[E] ${state.zoneCount(nearby) === recoveryZones[nearby].count ? 'ABRIR' : 'EXAMINAR'} ${recoveryZones[nearby].title.toUpperCase()}` : '');
+      setText(interact, nearby === -3 ? '[E] CONSULTAR BACKUP' : nearby === -1 ? '[E] HABLAR CON AUX' : nearby >= 0 ? `[E] ${state.zoneCount(nearby) === recoveryZones[nearby].count ? 'ABRIR' : 'EXAMINAR'} ${recoveryZones[nearby].title.toUpperCase()}` : '');
       const zoneIndex = recoveryZones.findIndex(zone => player.z <= zone.start + 1 && player.z >= zone.end - 1);
       setText(nearestText, !state.hasPda ? 'ACÉRCATE AL ROBOT CON EL SÍMBOLO !' : zoneIndex >= 0 ? `${recoveryZones[zoneIndex].title.toUpperCase()} ${state.zoneCount(zoneIndex)}/${recoveryZones[zoneIndex].count}` : 'BUS DE DATOS / REGISTROS EN RECUPERACIÓN');
       if (performance.now() > toastUntil) { toast.classList.remove('is-visible'); lastToast = ''; }

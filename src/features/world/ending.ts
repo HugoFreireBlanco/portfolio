@@ -6,6 +6,7 @@ import type { RecoveryState } from './recovery-state';
 import './ending.css';
 import { t, translateText } from '../../i18n';
 import { createParticles } from '../loader/particles';
+import { unlockArchive } from '../portfolio/archive-access';
 
 /** The isolated bus endpoint, and the uninterrupted second half of the boot. */
 export function createEnding(scene: THREE.Scene, host: HTMLElement, layer: HTMLElement, state: RecoveryState,
@@ -250,6 +251,7 @@ export function createEnding(scene: THREE.Scene, host: HTMLElement, layer: HTMLE
     } else signature.hidden = true;
     delete layer.dataset.ending; delete host.dataset.ending;
     changeStage('return');
+    unlockArchive();
     if (archive) {
       location.hash = 'archivo/proyectos';
       // Keep the opaque modal above the router's own transition until ready.
